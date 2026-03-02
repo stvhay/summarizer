@@ -23,13 +23,31 @@ Dispatch code-reviewer subagent to catch issues before they cascade.
 
 ## How to Request
 
-**1. Get git SHAs:**
+**1. Detect context:**
+
+Determine if a PR exists for the current branch and whether you are the author:
+
+```bash
+# Get PR number (empty if no PR exists)
+PR_NUMBER=$(gh pr view --json number --jq '.number' 2>/dev/null || echo "")
+
+# If PR exists, check authorship
+if [ -n "$PR_NUMBER" ]; then
+  PR_AUTHOR=$(gh pr view --json author --jq '.author.login')
+  CURRENT_USER=$(gh api user --jq '.login')
+  IS_AUTHOR=$( [ "$PR_AUTHOR" = "$CURRENT_USER" ] && echo "true" || echo "false" )
+fi
+```
+
+If no PR exists, the review runs locally only (existing behavior).
+
+**2. Get git SHAs:**
 ```bash
 BASE_SHA=$(git rev-parse HEAD~1)  # or origin/main
 HEAD_SHA=$(git rev-parse HEAD)
 ```
 
-**2. Dispatch code-reviewer subagent:**
+**3. Dispatch code-reviewer subagent:**
 
 Use Task tool with code-reviewer type, fill template at `code-reviewer.md`
 
@@ -39,39 +57,56 @@ Use Task tool with code-reviewer type, fill template at `code-reviewer.md`
 - `{BASE_SHA}` - Starting commit
 - `{HEAD_SHA}` - Ending commit
 - `{DESCRIPTION}` - Brief summary
+- `{PR_NUMBER}` - PR number (empty for local-only review)
+- `{IS_AUTHOR}` - `true` if current user authored the PR, `false` otherwise
 
-**3. Act on feedback:**
+**4. Act on feedback:**
 - Fix Critical issues immediately
 - Fix Important issues before proceeding
 - Note Minor issues for later
 - Push back if reviewer is wrong (with reasoning)
 
-## Example
+## Example: Local Review (no PR)
 
 ```
 [Just completed Task 2: Add verification function]
 
 You: Let me request code review before proceeding.
 
+PR_NUMBER=""  # No PR exists yet
 BASE_SHA=$(git log --oneline | grep "Task 1" | head -1 | awk '{print $1}')
 HEAD_SHA=$(git rev-parse HEAD)
 
+[Dispatch code-reviewer subagent with PR_NUMBER="" IS_AUTHOR=""]
+
+[Subagent returns review locally]
+You: [Fix issues, continue to Task 3]
+```
+
+## Example: PR Review (self-authored)
+
+```
+[PR #5 is open, you are the author]
+
+PR_NUMBER=5, IS_AUTHOR=true
+
 [Dispatch code-reviewer subagent]
-  WHAT_WAS_IMPLEMENTED: Verification and repair functions for conversation index
-  PLAN_OR_REQUIREMENTS: Task 2 from docs/plans/deployment-plan.md
-  BASE_SHA: a7981ec
-  HEAD_SHA: 3df7661
-  DESCRIPTION: Added verifyIndex() and repairIndex() with 4 issue types
+[Subagent posts structured comment on PR #5]
+[Clean review: comment signals LGTM — no --approve attempted]
+[Issues found: comment lists them — no --request-changes attempted]
+```
 
-[Subagent returns]:
-  Strengths: Clean architecture, real tests
-  Issues:
-    Important: Missing progress indicators
-    Minor: Magic number (100) for reporting interval
-  Assessment: Ready to proceed
+## Example: PR Review (external)
 
-You: [Fix progress indicators]
-[Continue to Task 3]
+```
+[PR #12 from a contributor, you are not the author]
+
+PR_NUMBER=12, IS_AUTHOR=false
+
+[Dispatch code-reviewer subagent]
+[Subagent posts structured comment on PR #12]
+[Clean review: gh pr review 12 --approve]
+[Issues found: gh pr review 12 --request-changes]
 ```
 
 ## Integration with Workflows
