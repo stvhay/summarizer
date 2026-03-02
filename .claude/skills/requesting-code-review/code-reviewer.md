@@ -21,7 +21,7 @@ You are reviewing code changes for production readiness.
 ## PR Context
 
 **PR Number:** {PR_NUMBER} (empty if local-only review)
-**Author is reviewer:** {IS_AUTHOR} (`true`/`false`, empty if local-only)
+**Self-authored PR:** {IS_AUTHOR} (`true`/`false`, empty if local-only)
 
 ## Git Range to Review
 

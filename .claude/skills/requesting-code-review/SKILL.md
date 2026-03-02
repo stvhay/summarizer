@@ -28,18 +28,23 @@ Dispatch code-reviewer subagent to catch issues before they cascade.
 Determine if a PR exists for the current branch and whether you are the author:
 
 ```bash
-# Get PR number (empty if no PR exists)
-PR_NUMBER=$(gh pr view --json number --jq '.number' 2>/dev/null || echo "")
+# Get PR number and author in a single API call
+PR_JSON=$(gh pr view --json number,author 2>/dev/null) || PR_JSON=""
 
-# If PR exists, check authorship
-if [ -n "$PR_NUMBER" ]; then
-  PR_AUTHOR=$(gh pr view --json author --jq '.author.login')
+if [ -n "$PR_JSON" ]; then
+  PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
+  PR_AUTHOR=$(echo "$PR_JSON" | jq -r '.author.login')
   CURRENT_USER=$(gh api user --jq '.login')
   IS_AUTHOR=$( [ "$PR_AUTHOR" = "$CURRENT_USER" ] && echo "true" || echo "false" )
+else
+  PR_NUMBER=""
+  IS_AUTHOR=""
 fi
 ```
 
 If no PR exists, the review runs locally only (existing behavior).
+
+**Error handling:** If `gh pr view` fails for reasons other than "no PR" (auth failure, network error, rate limit), the agent must surface the error rather than silently falling back to local-only review. Check `gh auth status` and retry before assuming no PR exists. A silent fallback means the agent skips posting to the PR — the user won't know the review happened.
 
 **2. Get git SHAs:**
 ```bash
@@ -69,18 +74,31 @@ Use Task tool with code-reviewer type, fill template at `code-reviewer.md`
 ## Example: Local Review (no PR)
 
 ```
-[Just completed Task 2: Add verification function]
+[Just completed Task 2: Add PR-aware review flow]
 
 You: Let me request code review before proceeding.
 
 PR_NUMBER=""  # No PR exists yet
-BASE_SHA=$(git log --oneline | grep "Task 1" | head -1 | awk '{print $1}')
-HEAD_SHA=$(git rev-parse HEAD)
+BASE_SHA=447c459
+HEAD_SHA=9a0d42a
 
-[Dispatch code-reviewer subagent with PR_NUMBER="" IS_AUTHOR=""]
+[Dispatch code-reviewer subagent]:
+  WHAT_WAS_IMPLEMENTED: PR-aware review flow with authorship detection
+  PLAN_OR_REQUIREMENTS: Task 2 from docs/plans/optimize-pr-review.md
+  BASE_SHA: 447c459
+  HEAD_SHA: 9a0d42a
+  DESCRIPTION: Added context detection, PR commenting, and authorship-based action branching
+  PR_NUMBER: ""
+  IS_AUTHOR: ""
 
-[Subagent returns review locally]
-You: [Fix issues, continue to Task 3]
+[Subagent returns]:
+  Strengths: Clean decision matrix, backwards-compatible design
+  Issues:
+    Important: Redundant API calls in detection script
+    Minor: Examples lack concrete placeholder values
+  Assessment: Ready to proceed with fixes
+
+You: [Fix redundant API calls, continue to Task 3]
 ```
 
 ## Example: PR Review (self-authored)
