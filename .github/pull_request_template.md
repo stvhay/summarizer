@@ -37,6 +37,7 @@ Closes #
 - [ ] `/verification-before-completion` (auto-triggered)
 - [ ] `/requesting-code-review`
 - [ ] `/finishing-a-development-branch` (auto-triggered)
+- [ ] `/using-git-worktrees`
 - [ ] `/systematic-debugging`
 - [ ] `/writing-skills` (for skill contributions)
 - [ ] `/writing-clearly-and-concisely`

@@ -15,7 +15,7 @@ Every change — feature, fix, refactor, docs, or skill — follows this process
 
 ### 1. File a GitHub issue
 
-Use the [feature request template](../../issues/new?template=feature-request.yml) to describe the problem and proposed solution. Small fixes can reference an existing issue.
+Use the [feature request template](https://github.com/stvhay/summarizer/issues/new?template=feature-request.yml) to describe the problem and proposed solution. Small fixes can reference an existing issue.
 
 ### 2. Create a branch
 
