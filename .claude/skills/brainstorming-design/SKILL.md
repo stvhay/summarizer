@@ -71,9 +71,9 @@ After validating the design direction, evaluate whether detailed UX design is ne
 ## After the Design
 
 **Documentation:**
-- Write the validated design to `docs/plans/YYYY-MM-DD-<topic>-design.md`
+- Write the validated design to `docs/plans/YYYY-MM-DD-<topic>-design.md` (local working directory, not committed)
 - Use writing-clearly-and-concisely skill if available
-- Commit the design document to git
+- Paste the design into the PR body when you open it
 
 **Implementation (if continuing):**
 - Ask: "Ready to set up for implementation?"
