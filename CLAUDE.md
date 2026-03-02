@@ -169,6 +169,60 @@ summaries/<slug>/
     └── ...
 ```
 
+## Publishing to GitHub Gist
+
+Optionally publish a finished summary as a GitHub Gist for easy sharing.
+
+### When to use
+
+Use gists for text-only summaries (no images). If the summary references local images, either host images elsewhere and rewrite paths to absolute URLs, or use a GitHub repo instead.
+
+### Gist display conventions
+
+GitHub Gist renders three prominent elements: the **filename** (as page title), the **description** (as a gray subtitle), and the **rendered markdown**. To avoid redundancy:
+
+- **Filename**: `<slug>.md` — the human-readable slug, not the video ID. This becomes the gist's page title (e.g., `stvhay / frontier-operations-five-skills-tiny-teams.md`).
+- **Description**: `"Video Summary"` — frames the genre for anyone landing on the gist. Static across all summaries.
+- **Markdown H1**: The full human-readable title. This is the reader's entry point once they're in the document.
+
+### Gist-adapted front matter
+
+The canonical summary in `summaries/` uses a multi-line bold metadata block (Source, Speaker, Date, Duration). For gist display, adapt the front matter into a plain-text metadata block with explicit labels, linked author, and `<br>` line breaks. Do not use a blockquote — the left bar makes metadata look like a quotation.
+
+```markdown
+# Video Title Here
+
+**Source**: [Original video title](https://source-url)<br>
+**Author**: [Speaker Name](https://channel-or-profile-url) (Channel Name)<br>
+**Date**: Month Day, Year<br>
+**Length**: HH:MM
+
+---
+```
+
+The `<br>` tags are required — without them, GitHub collapses consecutive lines into a single paragraph.
+
+Fetch the author's channel/profile URL from video metadata (`yt-dlp --dump-json` → `uploader_url`). For academic talks, use ORCID or institutional page if available.
+
+Write the adapted version to a temp file named `<slug>.md` for the gist — don't modify the canonical summary.
+
+### Process
+
+1. **Create the gist-adapted file** at `/tmp/<slug>.md` — copy the summary, replace the multi-line front matter with the format above.
+2. **Create the gist**:
+   ```bash
+   gh gist create --public \
+     -d "Video Summary" \
+     "/tmp/<slug>.md"
+   ```
+   Use `--public` for discoverable gists or omit for secret (URL-only) gists.
+3. **Clean up** — delete `/tmp/<slug>.md`.
+
+### Notes
+
+- Gists are text-only. Binary files (images) can technically be added by cloning the gist repo and pushing, but GitHub does not render relative image paths in gist markdown. Avoid this unless you rewrite image references to absolute `gist.githubusercontent.com` raw URLs.
+- The `.mkv` archive is too large for gists. Gists are for the summary document only.
+
 ## Writing Standards
 
 - Front matter: title, source URL, speaker, date, duration.
@@ -196,3 +250,6 @@ summaries/<slug>/
 - **archive.org needs special handling for subtitles.** yt-dlp doesn't detect archive.org subtitle files. Check the item's download page (`https://archive.org/download/<id>/`) for `.asr.srt` or `.vtt` files, download with `curl`, and embed into the MKV with `ffmpeg -i video.mkv -i subs.srt -c copy -c:s srt output.mkv`.
 - **archive.org item IDs work as yt-dlp video IDs.** The archive.org identifier (e.g., `redwood-center-2026-02-11-ben-dongsung-huh`) serves as the `<id>` throughout the workflow. Use `https://archive.org/details/<id>` as the URL for yt-dlp.
 - **Verify academic summaries against the source paper before copy-editing.** ASR transcripts of math-heavy talks garble technical terms ("Kaylee table" for "Cayley table," "eReps" for "irreps," "cautious rush" for "Cauchy-Schwarz"). The only reliable correction is to find the actual paper and cross-reference the claims. Do this before the Strunk & White pass — fixing factual errors after prose has been polished wastes effort.
+- **GitHub Gist markdown collapses consecutive lines into one paragraph.** Metadata lines like `**Source**: ...` followed by `**Author**: ...` render as a single run-on line. Use `<br>` at the end of each line to force line breaks. Blockquotes have the same problem and also add a left bar that makes metadata look like a quotation — use plain text with `<br>` instead.
+- **Don't duplicate the title in the gist description.** The gist description renders as a gray caption above the file. If it matches the H1, the title appears twice. Use a static genre label like `"Video Summary"` for the description and let the H1 carry the title.
+- **Use the slug as the gist filename, not the video ID.** `frontier-operations-five-skills-tiny-teams.md` reads as a page title; `RnjgLlQTMf0.md` doesn't. The slug is already unique within the project. Write the gist-adapted markdown to `/tmp/<slug>.md` so `gh gist create` picks up the right filename.
