@@ -94,7 +94,9 @@ Skills live in `.claude/skills/<skill-name>/SKILL.md`. To add or modify a skill:
 
 Several skills are derived from upstream open-source projects:
 
-- **obra/superpowers** — Most workflow skills originate from [obra/superpowers](https://github.com/obra/superpowers). MIT License. See [LICENSE.superpowers](LICENSE.superpowers).
+- **obra/superpowers** — The following skills originate from [obra/superpowers](https://github.com/obra/superpowers). MIT License. See [LICENSE.superpowers](LICENSE.superpowers). Sync status tracked in `.claude/skills/UPSTREAM-superpowers.md`.
+  - Tracked in this repo: `brainstorming`, `dispatching-parallel-agents`, `executing-plans`, `finishing-a-development-branch`, `receiving-code-review`, `requesting-code-review`, `subagent-driven-development`, `systematic-debugging`, `test-driven-development`, `using-git-worktrees`, `verification-before-completion`, `writing-plans`, `writing-skills`
+  - Available locally (not committed): `using-superpowers`
 - **writing-clearly-and-concisely** — Based on William Strunk Jr.'s *The Elements of Style* (1918, public domain).
 
 If you contribute a skill derived from another source, add appropriate attribution and a license file.

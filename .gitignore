@@ -9,6 +9,7 @@ result
 .claude/*
 !.claude/skills/
 .claude/skills/*
+!.claude/skills/UPSTREAM-superpowers.md
 !.claude/skills/brainstorming/
 !.claude/skills/code-simplification/
 !.claude/skills/dispatching-parallel-agents/
