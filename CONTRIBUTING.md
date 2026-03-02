@@ -23,7 +23,7 @@ Use `/using-git-worktrees` to create an isolated worktree for your work, or crea
 
 ### 3. Brainstorm the design
 
-Run `/brainstorming-design` to explore the problem space before writing code. This skill asks clarifying questions, considers alternatives, and produces a design you can review before committing to an approach.
+Run `/brainstorming` to explore the problem space before writing code. This skill asks clarifying questions, considers alternatives, and produces a design you can review before committing to an approach.
 
 ### 4. Write an implementation plan
 
@@ -68,7 +68,7 @@ These skills ship with the repo in `.claude/skills/`. They are loaded automatica
 
 | Skill | When to use |
 |---|---|
-| `/brainstorming-design` | Before creative work — features, components, behavior changes |
+| `/brainstorming` | Before creative work — features, components, behavior changes |
 | `/writing-plans` | When you have requirements and need an implementation plan |
 | `/executing-plans` | To execute a written plan with checkpoints |
 | `/requesting-code-review` | Before submitting a PR, to self-review |

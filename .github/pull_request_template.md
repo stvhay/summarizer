@@ -31,7 +31,7 @@ Closes #
 
 <!-- Check the skills you used to prepare this PR. -->
 
-- [ ] `/brainstorming-design`
+- [ ] `/brainstorming`
 - [ ] `/writing-plans`
 - [ ] `/executing-plans`
 - [ ] `/verification-before-completion` (auto-triggered)

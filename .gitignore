@@ -9,7 +9,7 @@ result
 .claude/*
 !.claude/skills/
 .claude/skills/*
-!.claude/skills/brainstorming-design/
+!.claude/skills/brainstorming/
 !.claude/skills/code-simplification/
 !.claude/skills/executing-plans/
 !.claude/skills/finishing-a-development-branch/
