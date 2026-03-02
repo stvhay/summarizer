@@ -84,6 +84,10 @@ The entire workflow lives in `CLAUDE.md`. There's no application code — Claude
 
 `CLAUDE.md` is both the documentation and the program.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow. This project uses Claude Code skills to maintain quality — the skills ship with the repo.
+
 ## License
 
 [MIT](LICENSE)

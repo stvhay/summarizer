@@ -195,3 +195,7 @@ Key constraints: gists don't support directories (images go at root), use absolu
 - **Blockquote the best lines verbatim.** The speaker's phrasing often carries meaning that paraphrasing would lose. Pull direct quotes for punchy or precise statements.
 - **archive.org item IDs work as yt-dlp video IDs.** The archive.org identifier (e.g., `redwood-center-2026-02-11-ben-dongsung-huh`) serves as the `<id>` throughout the workflow. Use `https://archive.org/details/<id>` as the URL for yt-dlp.
 - **Verify academic summaries against the source paper before copy-editing.** ASR transcripts garble technical terms ("Kaylee table" for "Cayley table," "eReps" for "irreps"). Cross-reference the actual paper before the Strunk & White pass — fixing factual errors after prose is polished wastes effort.
+
+## Contributing
+
+All changes follow the workflow in [CONTRIBUTING.md](CONTRIBUTING.md). File a GitHub issue, use the bundled skills to brainstorm, plan, execute, verify, and review, then open a PR with the plan and issue reference.
