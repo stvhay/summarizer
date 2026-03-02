@@ -175,7 +175,7 @@ Optionally publish a finished summary as a GitHub Gist for easy sharing.
 
 ### When to use
 
-Use gists for text-only summaries (no images). If the summary references local images, either host images elsewhere and rewrite paths to absolute URLs, or use a GitHub repo instead.
+Gists work for both text-only and image-bearing summaries. For summaries with images, clone the gist repo, add images at the root (gists don't support directories), rewrite image paths to absolute `gist.githubusercontent.com/raw/` URLs, and push.
 
 ### Gist display conventions
 
@@ -206,7 +206,7 @@ Fetch the author's channel/profile URL from video metadata (`yt-dlp --dump-json`
 
 Write the adapted version to a temp file named `<slug>.md` for the gist — don't modify the canonical summary.
 
-### Process
+### Process (text-only)
 
 1. **Create the gist-adapted file** at `/tmp/<slug>.md` — copy the summary, replace the multi-line front matter with the format above.
 2. **Create the gist**:
@@ -218,9 +218,32 @@ Write the adapted version to a temp file named `<slug>.md` for the gist — don'
    Use `--public` for discoverable gists or omit for secret (URL-only) gists.
 3. **Clean up** — delete `/tmp/<slug>.md`.
 
+### Process (with images)
+
+1. **Create the gist-adapted file** at `/tmp/<slug>.md` — same front matter adaptation as above, but keep `images/slide-*.jpg` references for now.
+2. **Create the gist** with `gh gist create --public -d "Video Summary" "/tmp/<slug>.md"`.
+3. **Clone the gist repo** to a temp directory:
+   ```bash
+   gh gist clone <gist-id> /tmp/gist-<slug>
+   ```
+4. **Copy images flat to the gist root** — gists reject pushes containing directories:
+   ```bash
+   cp summaries/<slug>/images/*.jpg /tmp/gist-<slug>/
+   ```
+5. **Rewrite image paths** in the markdown from `images/slide-` to absolute raw URLs:
+   ```
+   https://gist.githubusercontent.com/<user>/<gist-id>/raw/slide-
+   ```
+6. **Commit and push**:
+   ```bash
+   cd /tmp/gist-<slug> && git add -A && git commit -m "Add slide images" && git push
+   ```
+7. **Clean up** — delete `/tmp/gist-<slug>` and `/tmp/<slug>.md`.
+
 ### Notes
 
-- Gists are text-only. Binary files (images) can technically be added by cloning the gist repo and pushing, but GitHub does not render relative image paths in gist markdown. Avoid this unless you rewrite image references to absolute `gist.githubusercontent.com` raw URLs.
+- **Gists don't support directories.** Image files must live at the repo root. The gist web UI lists them alongside the markdown, but they don't interfere with rendering.
+- **Use absolute raw URLs for images.** `gist.githubusercontent.com/<user>/<gist-id>/raw/<filename>` resolves to the latest revision. Relative paths (`images/slide-...`) won't render.
 - The `.mkv` archive is too large for gists. Gists are for the summary document only.
 
 ## Writing Standards
@@ -253,3 +276,6 @@ Write the adapted version to a temp file named `<slug>.md` for the gist — don'
 - **GitHub Gist markdown collapses consecutive lines into one paragraph.** Metadata lines like `**Source**: ...` followed by `**Author**: ...` render as a single run-on line. Use `<br>` at the end of each line to force line breaks. Blockquotes have the same problem and also add a left bar that makes metadata look like a quotation — use plain text with `<br>` instead.
 - **Don't duplicate the title in the gist description.** The gist description renders as a gray caption above the file. If it matches the H1, the title appears twice. Use a static genre label like `"Video Summary"` for the description and let the H1 carry the title.
 - **Use the slug as the gist filename, not the video ID.** `frontier-operations-five-skills-tiny-teams.md` reads as a page title; `RnjgLlQTMf0.md` doesn't. The slug is already unique within the project. Write the gist-adapted markdown to `/tmp/<slug>.md` so `gh gist create` picks up the right filename.
+- **Gists reject pushes with directories.** `remote: Gist does not support directories.` Copy images flat to the gist repo root instead of preserving the `images/` subfolder.
+- **Rewrite image paths to absolute `gist.githubusercontent.com` raw URLs.** Relative paths don't render in gist markdown. The pattern `https://gist.githubusercontent.com/<user>/<gist-id>/raw/<filename>` resolves to the latest revision without needing a commit SHA.
+- **Gists with images work fine — create first, clone-push second.** Create the gist with just the markdown via `gh gist create`, then `git clone` the gist repo, add image files at the root, rewrite the markdown image refs to absolute URLs, and push. Two-step process but reliable.
