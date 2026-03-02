@@ -28,7 +28,9 @@ Dispatch code-reviewer subagent to catch issues before they cascade.
 Determine if a PR exists for the current branch and whether you are the author:
 
 ```bash
-# Get PR number and author in a single API call
+# Get PR number and author in a single API call.
+# NOTE: If this fails, check gh auth status before assuming no PR exists.
+# See "Error handling" below — silent fallback masks auth/network failures.
 PR_JSON=$(gh pr view --json number,author 2>/dev/null) || PR_JSON=""
 
 if [ -n "$PR_JSON" ]; then
@@ -58,7 +60,7 @@ Use Task tool with code-reviewer type, fill template at `code-reviewer.md`
 
 **Placeholders:**
 - `{WHAT_WAS_IMPLEMENTED}` - What you just built
-- `{PLAN_OR_REQUIREMENTS}` - What it should do
+- `{PLAN_REFERENCE}` - What it should do
 - `{BASE_SHA}` - Starting commit
 - `{HEAD_SHA}` - Ending commit
 - `{DESCRIPTION}` - Brief summary
@@ -84,7 +86,7 @@ HEAD_SHA=9a0d42a
 
 [Dispatch code-reviewer subagent]:
   WHAT_WAS_IMPLEMENTED: PR-aware review flow with authorship detection
-  PLAN_OR_REQUIREMENTS: Task 2 from docs/plans/optimize-pr-review.md
+  PLAN_REFERENCE: Task 2 from docs/plans/optimize-pr-review.md
   BASE_SHA: 447c459
   HEAD_SHA: 9a0d42a
   DESCRIPTION: Added context detection, PR commenting, and authorship-based action branching
