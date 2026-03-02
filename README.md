@@ -6,19 +6,40 @@ This is a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) workflow
 
 ## Prerequisites
 
-- [Nix](https://nixos.org/download/) (with flakes enabled)
-- [direnv](https://direnv.net/) (hooks into your shell to auto-load the environment)
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (Anthropic's CLI agent)
+- [direnv](https://direnv.net/) (hooks into your shell to auto-load the environment)
 
-## Setup
+Plus one of:
+- [Nix](https://nixos.org/download/) with flakes enabled, **or**
+- [Homebrew](https://brew.sh/) (macOS)
+
+## Setup (Nix)
 
 ```bash
 git clone https://github.com/stvhay/summarizer.git
 cd summarizer
-direnv allow    # installs yt-dlp, ffmpeg, imagemagick, mkvtoolnix
+direnv allow    # installs yt-dlp, ffmpeg, imagemagick, mkvtoolnix via Nix
 ```
 
-Then start Claude Code:
+## Setup (Homebrew)
+
+Install the dependencies:
+
+```bash
+brew install yt-dlp ffmpeg imagemagick mkvtoolnix
+```
+
+Then clone and allow direnv:
+
+```bash
+git clone https://github.com/stvhay/summarizer.git
+cd summarizer
+direnv allow    # creates working directories; verifies dependencies are present
+```
+
+If any tools are missing, direnv will tell you what to install.
+
+## Start
 
 ```bash
 claude
@@ -59,7 +80,7 @@ summaries/<slug>/
 
 ## How it works
 
-The entire workflow lives in `CLAUDE.md`. There's no application code — Claude Code reads the instructions and executes them using shell tools (`yt-dlp`, `ffmpeg`, `imagemagick`) provided by the Nix environment. The instructions encode operational knowledge: how to handle archive.org's subtitle quirks, when to prefer AV1 over H.264, how to catch ASR errors in math-heavy talks by cross-referencing the source paper.
+The entire workflow lives in `CLAUDE.md`. There's no application code — Claude Code reads the instructions and executes them using shell tools (`yt-dlp`, `ffmpeg`, `imagemagick`) provided by your environment. The instructions encode operational knowledge: how to handle archive.org's subtitle quirks, when to prefer AV1 over H.264, how to catch ASR errors in math-heavy talks by cross-referencing the source paper.
 
 `CLAUDE.md` is both the documentation and the program.
 
