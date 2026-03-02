@@ -57,6 +57,8 @@ Size tasks to the work, not to an arbitrary count. A plan may have 2 tasks or 6 
 - [ ] [Another condition]
 - [ ] [Integration/behavioral condition]
 
+**Dependencies:** [Other plans that must complete first, or "None"]
+
 ---
 ```
 
