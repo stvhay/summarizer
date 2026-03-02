@@ -7,9 +7,9 @@ description: Use when you have a written implementation plan to execute in a sep
 
 ## Overview
 
-Load plan, review critically, execute tasks — independent tasks in parallel, dependent tasks in sequence. Report for review between groups. Each task gets a fresh context.
+Load plan, review critically, execute tasks in batches, report for review between batches.
 
-**Core principle:** Fresh context per task. Independent tasks run in parallel. Dependent tasks wait. Verify acceptance criteria at the end.
+**Core principle:** Batch execution with checkpoints for review. Verify acceptance criteria at the end.
 
 **Announce at start:** "I'm using the executing-plans skill to implement this plan."
 
@@ -18,25 +18,21 @@ Load plan, review critically, execute tasks — independent tasks in parallel, d
 ### Step 1: Load and Review Plan
 1. Read plan file
 2. Review critically — identify questions or concerns
-3. Note task dependencies (which are independent, which depend on others)
-4. Note acceptance criteria from plan header
-5. If concerns: Raise them before starting
-6. If clear: Create TodoWrite and proceed
+3. Note acceptance criteria from plan header
+4. If concerns: Raise them before starting
+5. If clear: Create TodoWrite and proceed
 
-### Step 2: Group and Execute
-**Group tasks by dependencies:**
-- Independent tasks → same group, execute in parallel (dispatch subagents via Task tool)
-- Dependent tasks → later group, execute after dependencies complete
+### Step 2: Execute Batch
+**Default: First 3 tasks**
 
 For each task:
 1. Mark as in_progress
-2. Dispatch to fresh subagent with full task text (don't make subagent read plan file)
-3. Follow each step exactly (plan has bite-sized steps)
-4. Run verifications as specified
-5. Mark as completed
+2. Follow each step exactly (plan has bite-sized steps)
+3. Run verifications as specified
+4. Mark as completed
 
 ### Step 3: Report
-When group complete:
+When batch complete:
 - Show what was implemented
 - Show verification output
 - Say: "Ready for feedback."
@@ -44,8 +40,8 @@ When group complete:
 ### Step 4: Continue
 Based on feedback:
 - Apply changes if needed
-- Execute next group
-- Repeat until all groups complete
+- Execute next batch
+- Repeat until complete
 
 ### Step 5: Verify Acceptance Criteria
 After all tasks complete:
@@ -67,23 +63,39 @@ For larger efforts or autonomous execution, this skill can be run by a **teammat
 3. Teammate reports progress via messages
 4. Controller reviews and unblocks as needed
 
-This replaces the old "open a new terminal session" pattern.
-
 ## When to Stop and Ask for Help
 
 **STOP executing immediately when:**
-- Hit a blocker (missing dependency, test fails, instruction unclear)
+- Hit a blocker mid-batch (missing dependency, test fails, instruction unclear)
 - Plan has critical gaps
 - You don't understand an instruction
 - Verification fails repeatedly
 
 **Ask for clarification rather than guessing.**
 
+## When to Revisit Earlier Steps
+
+**Return to Step 1 (Review) when:**
+- Partner updates the plan based on your feedback
+- Fundamental approach needs rethinking after seeing implementation results
+
+**Don't force through blockers** — stop and ask.
+
 ## Remember
 - Review plan critically first
-- Group tasks by dependencies — parallelize what you can
-- Each task gets fresh context (full task text, not file references)
 - Follow plan steps exactly
 - Don't skip verifications
 - Verify acceptance criteria after all tasks complete
+- Between batches: just report and wait
 - Stop when blocked, don't guess
+- Never start implementation on main/master branch without explicit user consent
+
+## Integration
+
+**Required workflow skills:**
+- **using-git-worktrees** - REQUIRED: Set up isolated workspace before starting execution
+- **writing-plans** - Creates the plan this skill executes
+- **finishing-a-development-branch** - Complete development after all tasks
+
+**Alternative workflows:**
+- **subagent-driven-development** - Same-session execution with fresh subagents, parallel dispatch, two-stage review
