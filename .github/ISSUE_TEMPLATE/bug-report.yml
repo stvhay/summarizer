@@ -1,0 +1,48 @@
+name: Bug Report
+description: Report a problem with summarization output, tooling, or workflow
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please include enough detail to reproduce the issue.
+  - type: input
+    id: video-url
+    attributes:
+      label: Video URL
+      description: The source URL (YouTube, archive.org, etc.) if applicable.
+      placeholder: https://www.youtube.com/watch?v=...
+    validations:
+      required: false
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug. Include error messages, wrong output, or unexpected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: What should have happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Commands or steps to trigger the issue.
+      placeholder: |
+        1. Run `yt-dlp ...`
+        2. Run `/summarize`
+        3. See error in ...
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Environment details, screenshots, log output, or anything else relevant.
+    validations:
+      required: false

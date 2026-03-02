@@ -9,7 +9,17 @@ result
 .claude/*
 !.claude/skills/
 .claude/skills/*
+!.claude/skills/brainstorming-design/
+!.claude/skills/code-simplification/
+!.claude/skills/executing-plans/
+!.claude/skills/finishing-a-development-branch/
+!.claude/skills/requesting-code-review/
+!.claude/skills/systematic-debugging/
+!.claude/skills/using-git-worktrees/
+!.claude/skills/verification-before-completion/
 !.claude/skills/writing-clearly-and-concisely/
+!.claude/skills/writing-plans/
+!.claude/skills/writing-skills/
 
 # Local envrc overrides (per-machine)
 .envrc.local.d/
@@ -17,6 +27,9 @@ result
 # Output artifacts (re-downloadable / regenerable)
 transcripts/
 summaries/
+
+# Working documents (plans live in PR body, not repo)
+docs/plans/
 
 # Project memory (created by Claude Code on first run)
 MEMORY.md
