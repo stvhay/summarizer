@@ -6,28 +6,7 @@ Extract and summarize video content into structured markdown documents using `yt
 
 ## First-Run Setup
 
-On first use in a fresh clone, initialize project memory:
-
-1. Create `MEMORY.md` in the project root if it doesn't exist:
-   ```markdown
-   # Project Memory
-
-   Specific facts, edge cases, and session-specific context that doesn't belong
-   in CLAUDE.md (which covers general workflow and standards).
-   ```
-2. Configure Claude Code's auto-memory to redirect here. Write the following to the auto-memory file at `~/.claude/projects/*/memory/MEMORY.md` (the exact path depends on your project hash — check `~/.claude/projects/` for the directory matching this project):
-   ```markdown
-   # Auto Memory Redirect
-
-   Do not store project memory here. All project memory belongs in the project root:
-
-       /absolute/path/to/this/clone/MEMORY.md
-
-   Use that file for specific facts, edge cases, and session context.
-   General workflow and standards go in CLAUDE.md.
-   ```
-
-These files are gitignored. Each clone maintains its own memory.
+On first use in a fresh clone, follow `docs/FIRST_RUN.md` to initialize project memory files.
 
 ## Environment
 
@@ -196,80 +175,9 @@ summaries/<slug>/
 
 ## Publishing to GitHub Gist
 
-Optionally publish a finished summary as a GitHub Gist for easy sharing.
+Optionally publish a finished summary as a GitHub Gist. See `docs/PUBLISHING_GIST.md` for the full process.
 
-### When to use
-
-Gists work for both text-only and image-bearing summaries. For summaries with images, clone the gist repo, add images at the root (gists don't support directories), rewrite image paths to absolute `gist.githubusercontent.com/raw/` URLs, and push.
-
-### Gist display conventions
-
-GitHub Gist renders three prominent elements: the **filename** (as page title), the **description** (as a gray subtitle), and the **rendered markdown**. To avoid redundancy:
-
-- **Filename**: `<slug>.md` — the human-readable slug, not the video ID. This becomes the gist's page title (e.g., `stvhay / frontier-operations-five-skills-tiny-teams.md`).
-- **Description**: `"Video Summary"` — frames the genre for anyone landing on the gist. Static across all summaries.
-- **Markdown H1**: The full human-readable title. This is the reader's entry point once they're in the document.
-
-### Gist-adapted front matter
-
-The canonical summary in `summaries/` uses a multi-line bold metadata block (Source, Speaker, Date, Duration). For gist display, adapt the front matter into a plain-text metadata block with explicit labels, linked author, and `<br>` line breaks. Do not use a blockquote — the left bar makes metadata look like a quotation.
-
-```markdown
-# Video Title Here
-
-**Source**: [Original video title](https://source-url)<br>
-**Author**: [Speaker Name](https://channel-or-profile-url) (Channel Name)<br>
-**Date**: Month Day, Year<br>
-**Length**: HH:MM
-
----
-```
-
-The `<br>` tags are required — without them, GitHub collapses consecutive lines into a single paragraph.
-
-Fetch the author's channel/profile URL from video metadata (`yt-dlp --dump-json` → `uploader_url`). For academic talks, use ORCID or institutional page if available.
-
-Write the adapted version to a temp file named `<slug>.md` for the gist — don't modify the canonical summary.
-
-### Process (text-only)
-
-1. **Create the gist-adapted file** at `/tmp/<slug>.md` — copy the summary, replace the multi-line front matter with the format above.
-2. **Create the gist**:
-   ```bash
-   gh gist create --public \
-     -d "Video Summary" \
-     "/tmp/<slug>.md"
-   ```
-   Use `--public` for discoverable gists or omit for secret (URL-only) gists.
-3. **Clean up** — delete `/tmp/<slug>.md`.
-
-### Process (with images)
-
-1. **Create the gist-adapted file** at `/tmp/<slug>.md` — same front matter adaptation as above, but keep `images/slide-*.jpg` references for now.
-2. **Create the gist** with `gh gist create --public -d "Video Summary" "/tmp/<slug>.md"`.
-3. **Clone the gist repo** to a temp directory:
-   ```bash
-   gh gist clone <gist-id> /tmp/gist-<slug>
-   ```
-4. **Copy images flat to the gist root** — gists reject pushes containing directories:
-   ```bash
-   cp summaries/<slug>/images/*.jpg /tmp/gist-<slug>/
-   ```
-5. **Rewrite image paths** in the markdown from `images/slide-` to absolute raw URLs:
-   ```
-   https://gist.githubusercontent.com/<user>/<gist-id>/raw/slide-
-   ```
-6. **Commit and push**:
-   ```bash
-   cd /tmp/gist-<slug> && git add -A && git commit -m "Add slide images" && git push
-   ```
-7. **Clean up** — delete `/tmp/gist-<slug>` and `/tmp/<slug>.md`.
-
-### Notes
-
-- **Gists don't support directories.** Image files must live at the repo root. The gist web UI lists them alongside the markdown, but they don't interfere with rendering.
-- **Use absolute raw URLs for images.** `gist.githubusercontent.com/<user>/<gist-id>/raw/<filename>` resolves to the latest revision. Relative paths (`images/slide-...`) won't render.
-- The `.mkv` archive is too large for gists. Gists are for the summary document only.
+Key constraints: gists don't support directories (images go at root), use absolute `gist.githubusercontent.com/<user>/<gist-id>/raw/<filename>` URLs for images, use the slug as the gist filename, and use `"Video Summary"` as the description.
 
 ## Writing Standards
 
@@ -282,25 +190,8 @@ Write the adapted version to a temp file named `<slug>.md` for the gist — don'
 
 ## Lessons Learned
 
-- **Use `--sub-format json3` not VTT.** JSON3 gives structured segment data that's easy to parse programmatically. VTT requires more complex timestamp/cue parsing and the raw text is less clean.
-- **Always fetch metadata separately** (`--dump-json --no-download`). Title, channel, upload date, description, and chapter markers are all in there and save you from guessing context.
-- **Auto-generated subs are usually the only option.** Most YouTube videos don't have manually uploaded subtitles. `--write-auto-sub` is the right default. The transcript quality is good enough to work from.
-- **Convert JSON3 to plaintext transcript as an intermediate step.** Reading raw JSON3 is painful. A simple Python script to extract text with timestamps makes the transcript human-readable and easier to work with.
-- **Structure the summary around the speaker's own framework.** Don't impose a generic template. If the speaker has a clear structure (as most good talks do), follow it. The summary should feel like a compression of the talk, not a book report about it.
+- **Auto-generated subs are usually the only option.** Most YouTube videos don't have manually uploaded subtitles. `--write-auto-sub` is the right default.
+- **Structure the summary around the speaker's own framework.** Don't impose a generic template. If the speaker has a clear structure, follow it. The summary should feel like a compression of the talk, not a book report about it.
 - **Blockquote the best lines verbatim.** The speaker's phrasing often carries meaning that paraphrasing would lose. Pull direct quotes for punchy or precise statements.
-- **Use human-readable directory slugs.** Store each summary in `summaries/<slug>/<id>.md` where `<slug>` is a short hyphenated label derived from the title. Makes browsing summaries possible without memorizing YouTube IDs.
-- **Run `/writing-clearly-and-concisely` as a final pass.** Dispatches a subagent with Strunk's *Elements of Style* to tighten prose: active voice, positive form, cut filler, place emphasis at sentence ends. Catches things you miss after staring at a draft too long.
-- **Sample before extracting — most videos have no slides.** Many YouTube videos (monologues, podcasts, talking heads) are a single webcam shot for 30 minutes. Extract ~10 evenly-spaced sample frames first and review with Claude vision before investing in targeted extraction. If it's all talking head, skip the whole capture pipeline and note "no visual content."
-- **Extract frame bursts, not single frames.** A single frame at a timestamp often catches a transition or blur. Extract ~5 frames around the target and pick the sharpest one.
-- **Delete video files after extraction.** Videos are 150-300MB and re-downloadable. Keep only the optimized images in `summaries/<slug>/images/`.
-- **Prefer open formats for archival video, but quality wins.** YouTube serves AV1/VP9+Opus alongside H.264+AAC. Use yt-dlp's format selector to prefer open codecs (AV1 > VP9, Opus for audio) and mux into MKV. But if open codecs aren't available (common on archive.org) or the H.264/H.265 stream is higher quality, take the better stream. Always add a `bestvideo+bestaudio` fallback to the format selector so the download never fails.
-- **Embed subtitles in the archival `.mkv`.** Use `--write-auto-sub --sub-lang en --embed-subs` during the archival download so the transcript lives inside the container. This lets you delete all `transcripts/<id>.*` files after the workflow completes — everything worth keeping is in `summaries/<slug>/`.
-- **archive.org needs special handling for subtitles.** yt-dlp doesn't detect archive.org subtitle files. Check the item's download page (`https://archive.org/download/<id>/`) for `.asr.srt` or `.vtt` files, download with `curl`, and embed into the MKV with `ffmpeg -i video.mkv -i subs.srt -c copy -c:s srt output.mkv`.
 - **archive.org item IDs work as yt-dlp video IDs.** The archive.org identifier (e.g., `redwood-center-2026-02-11-ben-dongsung-huh`) serves as the `<id>` throughout the workflow. Use `https://archive.org/details/<id>` as the URL for yt-dlp.
-- **Verify academic summaries against the source paper before copy-editing.** ASR transcripts of math-heavy talks garble technical terms ("Kaylee table" for "Cayley table," "eReps" for "irreps," "cautious rush" for "Cauchy-Schwarz"). The only reliable correction is to find the actual paper and cross-reference the claims. Do this before the Strunk & White pass — fixing factual errors after prose has been polished wastes effort.
-- **GitHub Gist markdown collapses consecutive lines into one paragraph.** Metadata lines like `**Source**: ...` followed by `**Author**: ...` render as a single run-on line. Use `<br>` at the end of each line to force line breaks. Blockquotes have the same problem and also add a left bar that makes metadata look like a quotation — use plain text with `<br>` instead.
-- **Don't duplicate the title in the gist description.** The gist description renders as a gray caption above the file. If it matches the H1, the title appears twice. Use a static genre label like `"Video Summary"` for the description and let the H1 carry the title.
-- **Use the slug as the gist filename, not the video ID.** `frontier-operations-five-skills-tiny-teams.md` reads as a page title; `RnjgLlQTMf0.md` doesn't. The slug is already unique within the project. Write the gist-adapted markdown to `/tmp/<slug>.md` so `gh gist create` picks up the right filename.
-- **Gists reject pushes with directories.** `remote: Gist does not support directories.` Copy images flat to the gist repo root instead of preserving the `images/` subfolder.
-- **Rewrite image paths to absolute `gist.githubusercontent.com` raw URLs.** Relative paths don't render in gist markdown. The pattern `https://gist.githubusercontent.com/<user>/<gist-id>/raw/<filename>` resolves to the latest revision without needing a commit SHA.
-- **Gists with images work fine — create first, clone-push second.** Create the gist with just the markdown via `gh gist create`, then `git clone` the gist repo, add image files at the root, rewrite the markdown image refs to absolute URLs, and push. Two-step process but reliable.
+- **Verify academic summaries against the source paper before copy-editing.** ASR transcripts garble technical terms ("Kaylee table" for "Cayley table," "eReps" for "irreps"). Cross-reference the actual paper before the Strunk & White pass — fixing factual errors after prose is polished wastes effort.
