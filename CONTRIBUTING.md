@@ -27,7 +27,7 @@ Run `/brainstorming-design` to explore the problem space before writing code. Th
 
 ### 4. Write an implementation plan
 
-Run `/writing-plans` to produce a structured plan saved to `docs/plans/`. The plan breaks the work into 2-3 self-contained tasks with exact file paths, code, and test commands. This plan becomes part of your PR.
+Run `/writing-plans` to produce a structured plan in `docs/plans/` (a local working directory, not committed). The plan breaks the work into 2-3 self-contained tasks with exact file paths, code, and test commands. Paste the plan into your PR body when you open it.
 
 ### 5. Execute the plan
 
@@ -49,7 +49,7 @@ Run `/requesting-code-review` to dispatch a code review subagent that checks you
 
 Use the PR template. Include:
 - Reference to the GitHub issue
-- The implementation plan (inline or linked)
+- The implementation plan (paste into the collapsible details block)
 - Atomic commits — one logical change per commit
 
 ## Skill Reference
@@ -76,6 +76,11 @@ These skills ship with the repo in `.claude/skills/`. They are loaded automatica
 | `/using-git-worktrees` | To create an isolated worktree for feature work |
 | `/writing-clearly-and-concisely` | Final editing pass on prose (docs, summaries, commit messages) |
 | `/writing-skills` | When creating or modifying skills in `.claude/skills/` |
+
+## Project-Specific Guidelines
+
+- **Dependencies.** If you add a dependency, update `flake.nix` (Nix), the Homebrew instructions in `README.md`, and the dependency check in `.envrc.d/setup.sh`.
+- **Documentation.** If your change affects usage, output, or setup, update `README.md` to match.
 
 ## Contributing Skills
 
