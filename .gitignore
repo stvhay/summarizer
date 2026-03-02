@@ -5,8 +5,11 @@
 .direnv/
 result
 
-# Claude Code
-.claude/
+# Claude Code (ignore everything except tracked skills)
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/writing-clearly-and-concisely/
 
 # Local envrc overrides (per-machine)
 .envrc.local.d/
