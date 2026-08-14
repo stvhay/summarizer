@@ -27,13 +27,6 @@ On first use in a fresh clone, follow `docs/FIRST_RUN.md` to initialize project 
      ```
    - **archive.org**: yt-dlp often doesn't detect archive.org subtitles. Check the item's download page (`https://archive.org/download/<id>/`) for `.srt` or `.vtt` files and download them directly with `curl`.
    - **Other sources**: Try `--write-auto-sub` first; fall back to `--write-sub` or direct download.
-   - **No subtitles anywhere** (login-walled sites, conference recordings, local files): transcribe locally with `whisper-cpp`. Extract 16 kHz mono audio, then run the model:
-     ```bash
-     ffmpeg -i <video> -vn -ac 1 -ar 16000 -c:a pcm_s16le transcripts/<id>.wav
-     whisper-cli -m models/ggml-large-v3-turbo.bin -f transcripts/<id>.wav \
-       -l en -t 8 -osrt -of transcripts/<id>.asr
-     ```
-     Runs ~10x realtime. Models live in `models/` (untracked) — download from [ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp) if missing. **ASR output is noisy**: treat every proper noun and technical term as suspect and correct it against slides and primary sources during the factual accuracy review. Name ASR transcripts `<id>.asr.srt` to distinguish them from real subtitles.
 3. Convert subtitles to a readable timestamped transcript. For JSON3, extract `events[].segs[].utf8` and compute timestamps from `tStartMs`. For SRT, parse timestamp lines and text blocks. Save as `transcripts/<id>.transcript.txt`.
 4. Read the full transcript.
 5. Derive a human-readable slug from the video title (lowercase, hyphens, 4-6 key words — e.g., `frontier-operations-five-skills-tiny-teams`). Create a directory `summaries/<slug>/` and write the summary to `summaries/<slug>/<id>.md`.
@@ -202,11 +195,6 @@ Key constraints: gists don't support directories (images go at root), use absolu
 - **Blockquote the best lines verbatim.** The speaker's phrasing often carries meaning that paraphrasing would lose. Pull direct quotes for punchy or precise statements.
 - **archive.org item IDs work as yt-dlp video IDs.** The archive.org identifier (e.g., `redwood-center-2026-02-11-ben-dongsung-huh`) serves as the `<id>` throughout the workflow. Use `https://archive.org/details/<id>` as the URL for yt-dlp.
 - **Verify academic summaries against the source paper before copy-editing.** ASR transcripts garble technical terms ("Kaylee table" for "Cayley table," "eReps" for "irreps"). Cross-reference the actual paper before the Strunk & White pass — fixing factual errors after prose is polished wastes effort.
-- **Login-walled sources need a manual download.** Conference sites (e.g. VSS) serve recordings only to members, and `--cookies-from-browser` won't help when yt-dlp has no extractor for the page. Ask the user to download the file in their browser, then run the workflow against the local file. Everything downstream is unchanged except that subtitles must come from ASR.
-- **For multi-talk session recordings, find talk boundaries visually, not by guessing.** Sample frames across the recording (every ~4 min) into a labeled contact sheet with `ffmpeg` + `magick montage`, then read the title and "Thank you" slides to bracket each talk. Confirm against the published talk times: recording 00:00 usually maps to the session's advertised start, so a talk at 11:15 in a session starting at 10:45 sits near 00:30:00. Cut the audio for one talk instead of transcribing the whole session.
-- **Extract slides from the montage timestamps, then verify.** Slide timings read off a contact sheet are approximate, and short slides are easy to overshoot — re-check each extracted frame and re-sample at finer granularity where it landed on the wrong slide or mid-transition.
-- **The delivered talk can diverge from the published abstract.** VSS 22.23 presented seven experiments where its abstract described six, and the abstract's stimulus counts were never stated aloud. Follow the talk, and record the discrepancy in the summary rather than silently reconciling it.
-- **Check whether conference work is actually published.** A VSS abstract is author-supplied and unreviewed. Say so explicitly, and don't credit a talk with novelty that a cited prior paper already established.
 
 ## Contributing
 
