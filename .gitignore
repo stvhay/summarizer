@@ -4,6 +4,7 @@
 # local inputs
 local/
 models/
+.pi/metrics
 
 # Nix / direnv
 .direnv/
