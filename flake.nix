@@ -22,6 +22,8 @@
               ffmpeg
               imagemagick
               mkvtoolnix
+              whisper-cpp
+	      mdfried
             ];
             shellHook = ''
               true
