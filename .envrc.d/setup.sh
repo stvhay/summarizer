@@ -1,6 +1,7 @@
-# Working directories for intermediate artifacts and final output.
-# Both are gitignored — transcripts are disposable, summaries are local-only.
-export TRANSCRIPTS_DIR="$PWD/transcripts"
-export SUMMARIES_DIR="$PWD/summaries"
+# Gitignored workspace for inputs, intermediates, outputs, and Whisper models.
+export INBOX_DIR="$PWD/local/inbox"
+export TRANSCRIPTS_DIR="$PWD/local/transcripts"
+export SUMMARIES_DIR="$PWD/local/summaries"
+export MODELS_DIR="$PWD/local/models"
 
-mkdir -p "$TRANSCRIPTS_DIR" "$SUMMARIES_DIR"
+mkdir -p "$INBOX_DIR" "$TRANSCRIPTS_DIR" "$SUMMARIES_DIR" "$MODELS_DIR"

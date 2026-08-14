@@ -1,9 +1,8 @@
 # OS
 .DS_Store
 
-# local inputs
+# Local workspace (inputs, intermediates, outputs, models)
 local/
-models/
 .pi/metrics
 
 # Nix / direnv
@@ -33,10 +32,6 @@ result
 
 # Local envrc overrides (per-machine)
 .envrc.local.d/
-
-# Output artifacts (re-downloadable / regenerable)
-transcripts/
-summaries/
 
 # Working documents (plans live in PR body, not repo)
 docs/plans/

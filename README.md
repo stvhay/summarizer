@@ -47,7 +47,7 @@ claude
 
 ## Usage
 
-Paste a video URL and Claude Code follows the workflow defined in `CLAUDE.md`:
+Paste a video URL and Claude Code follows the workflow defined in `CLAUDE.md`. For local video material without a named path, place it in `local/inbox/`.
 
 1. Fetches metadata and subtitles via `yt-dlp`
 2. Converts subtitles to a readable transcript
@@ -62,10 +62,10 @@ Works with YouTube, archive.org, and any other site [yt-dlp supports](https://gi
 
 ## Output
 
-Each summary lives in its own directory under `summaries/`:
+Each summary lives in its own directory under `local/summaries/`:
 
 ```
-summaries/<slug>/
+local/summaries/<slug>/
 ├── <id>.md          # the summary
 ├── <id>.mkv         # archival video
 └── images/          # captured slides and diagrams

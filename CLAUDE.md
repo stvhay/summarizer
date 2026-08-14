@@ -12,38 +12,40 @@ On first use in a fresh clone, follow `docs/FIRST_RUN.md` to initialize project 
 
 - **Dependencies**: Managed via `flake.nix`. Add packages to `buildInputs`.
 - **Initialization**: `.envrc` sources `use flake` and runs scripts from `.envrc.d/` and `.envrc.local.d/`.
-- `.envrc.d/setup.sh` creates `transcripts/` and `summaries/` and exports `$TRANSCRIPTS_DIR` and `$SUMMARIES_DIR`.
-- Both directories are **local working directories** — not tracked in git. They're created on first `direnv allow` and can be regenerated from YouTube at any time.
+- `.envrc.d/setup.sh` creates `local/inbox/`, `local/transcripts/`, `local/summaries/`, and `local/models/` and exports their directory paths.
+- These directories are **local working directories** — not tracked in git. They're created on first `direnv allow`.
 - If you add a dependency to `flake.nix`, ask the user to restart the session so `direnv` reloads.
 
 ## Workflow
 
-1. Fetch video metadata: `yt-dlp --dump-json --no-download <url> > transcripts/<id>.meta.json`
+If the request does not name a source, inspect `local/inbox/` before requesting input.
+
+1. Fetch video metadata: `yt-dlp --dump-json --no-download <url> > local/transcripts/<id>.meta.json`
    - For archive.org, redirect stderr (`2>/dev/null`) as yt-dlp emits harmless warnings about non-numeric fields.
 2. Download subtitles. Format depends on the source:
    - **YouTube**: JSON3 format (richer than VTT for parsing):
      ```bash
-     yt-dlp --write-auto-sub --sub-lang en --sub-format json3 --skip-download -o "transcripts/%(id)s" <url>
+     yt-dlp --write-auto-sub --sub-lang en --sub-format json3 --skip-download -o "local/transcripts/%(id)s" <url>
      ```
    - **archive.org**: yt-dlp often doesn't detect archive.org subtitles. Check the item's download page (`https://archive.org/download/<id>/`) for `.srt` or `.vtt` files and download them directly with `curl`.
    - **Other sources**: Try `--write-auto-sub` first; fall back to `--write-sub` or direct download.
    - **No subtitles anywhere** (login-walled sites, conference recordings, local files): transcribe locally with `whisper-cpp`. Extract 16 kHz mono audio, then run the model:
      ```bash
-     ffmpeg -i <video> -vn -ac 1 -ar 16000 -c:a pcm_s16le transcripts/<id>.wav
-     whisper-cli -m models/ggml-large-v3-turbo.bin -f transcripts/<id>.wav \
-       -l en -t 8 -osrt -of transcripts/<id>.asr
+     ffmpeg -i <video> -vn -ac 1 -ar 16000 -c:a pcm_s16le local/transcripts/<id>.wav
+     whisper-cli -m local/models/ggml-large-v3-turbo.bin -f local/transcripts/<id>.wav \
+       -l en -t 8 -osrt -of local/transcripts/<id>.asr
      ```
-     Runs ~10x realtime. Models live in `models/` (untracked) — download from [ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp) if missing. **ASR output is noisy**: treat every proper noun and technical term as suspect and correct it against slides and primary sources during the factual accuracy review. Name ASR transcripts `<id>.asr.srt` to distinguish them from real subtitles.
-3. Convert subtitles to a readable timestamped transcript. For JSON3, extract `events[].segs[].utf8` and compute timestamps from `tStartMs`. For SRT, parse timestamp lines and text blocks. Save as `transcripts/<id>.transcript.txt`.
+     Runs ~10x realtime. Models live in `local/models/` (untracked) — download from [ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp) if missing. **ASR output is noisy**: treat every proper noun and technical term as suspect and correct it against slides and primary sources during the factual accuracy review. Name ASR transcripts `<id>.asr.srt` to distinguish them from real subtitles.
+3. Convert subtitles to a readable timestamped transcript. For JSON3, extract `events[].segs[].utf8` and compute timestamps from `tStartMs`. For SRT, parse timestamp lines and text blocks. Save as `local/transcripts/<id>.transcript.txt`.
 4. Read the full transcript.
-5. Derive a human-readable slug from the video title (lowercase, hyphens, 4-6 key words — e.g., `frontier-operations-five-skills-tiny-teams`). Create a directory `summaries/<slug>/` and write the summary to `summaries/<slug>/<id>.md`.
+5. Derive a human-readable slug from the video title (lowercase, hyphens, 4-6 key words — e.g., `frontier-operations-five-skills-tiny-teams`). Create a directory `local/summaries/<slug>/` and write the summary to `local/summaries/<slug>/<id>.md`.
 6. **Factual accuracy review** (for academic/technical lectures — see details below).
 7. **Visual review and screen capture** (see details below).
 8. **Archive video** — download highest-quality video+audio as `.mkv` (see details below).
 9. Run `/writing-clearly-and-concisely` on the finished summary as a final editing pass.
-10. **Clean up transcript artifacts** — remove all intermediate files for this video from `transcripts/`:
+10. **Clean up transcript artifacts** — remove all intermediate files for this video from `local/transcripts/`:
     ```bash
-    rm -f transcripts/<id>.*
+    rm -f local/transcripts/<id>.*
     ```
     The metadata, subtitles, and plaintext transcript are all re-downloadable. Subtitles are embedded in the archival `.mkv`.
 
@@ -83,13 +85,13 @@ After writing the summary, review the video for visual content worth including (
 1. **Download the video** at up to 1080p for frame extraction:
    ```bash
    yt-dlp -f "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]" \
-     -o "transcripts/<id>.video.mp4" --merge-output-format mp4 <url>
+     -o "local/transcripts/<id>.video.mp4" --merge-output-format mp4 <url>
    ```
 2. **Sample frames** — extract ~10-12 evenly spaced frames across the video using ffmpeg. Use Claude vision to review them and determine the visual style (talking head, slides, mixed, screenshare, etc.).
 3. **Decide whether captures are needed.** If the video is pure talking-head with no on-screen visuals, skip extraction and note "No visual content to capture" in the process. Many YouTube videos (especially monologues and podcasts) have no capture-worthy visuals.
 4. **If visuals exist**, cross-reference the transcript to identify timestamps where key visual content appears (slide transitions, chart displays, diagram reveals, significant on-screen text). Extract candidate frames at those timestamps:
    ```bash
-   ffmpeg -ss <timestamp> -i transcripts/<id>.video.mp4 -frames:v 5 -q:v 2 /tmp/candidate_%03d.jpg
+   ffmpeg -ss <timestamp> -i local/transcripts/<id>.video.mp4 -frames:v 5 -q:v 2 /tmp/candidate_%03d.jpg
    ```
    Extract a short burst (~5 frames) around each timestamp to avoid capturing mid-transition or blurred frames.
 5. **Select best frames** using Claude vision. Pick the sharpest, most legible frame for each visual. Reject duplicates and near-duplicates.
@@ -99,14 +101,14 @@ After writing the summary, review the video for visual content worth including (
    ```
 7. **Save to `images/` subfolder** relative to the summary `.md` file, using descriptive filenames:
    ```
-   summaries/<slug>/images/slide-01-bubble-diagram.jpg
-   summaries/<slug>/images/chart-02-revenue-per-employee.jpg
+   local/summaries/<slug>/images/slide-01-bubble-diagram.jpg
+   local/summaries/<slug>/images/chart-02-revenue-per-employee.jpg
    ```
 8. **Insert image references** in the markdown summary at the appropriate location:
    ```markdown
    ![Bubble diagram showing expanding AI capability frontier](images/slide-01-bubble-diagram.jpg)
    ```
-9. **Clean up** — delete the downloaded video file (`transcripts/<id>.video.mp4`) after extraction. Videos are large and re-downloadable; keep only the optimized images.
+9. **Clean up** — delete the downloaded video file (`local/transcripts/<id>.video.mp4`) after extraction. Videos are large and re-downloadable; keep only the optimized images.
 
 ## Archival Video Download
 
@@ -132,7 +134,7 @@ Format priority when choosing: **highest quality first**, with open codecs as ti
      -f "bestvideo[vcodec^=av01]+bestaudio[acodec=opus]/bestvideo[vcodec^=vp9]+bestaudio[acodec=opus]/bestvideo[vcodec^=av01]+bestaudio/bestvideo[vcodec^=vp9]+bestaudio/bestvideo+bestaudio" \
      --write-auto-sub --sub-lang en --embed-subs \
      --merge-output-format mkv \
-     -o "summaries/<slug>/<id>.mkv" <url>
+     -o "local/summaries/<slug>/<id>.mkv" <url>
    ```
    The trailing `bestvideo+bestaudio` fallback ensures you still get the best available even if no open codecs are served.
 
@@ -144,13 +146,13 @@ archive.org usually serves a single H.264 MP4. yt-dlp handles it, but subtitles 
    ```bash
    yt-dlp -f "bestvideo+bestaudio/best" \
      --merge-output-format mkv \
-     -o "summaries/<slug>/<id>.mkv" <url>
+     -o "local/summaries/<slug>/<id>.mkv" <url>
    ```
 2. **Embed subtitles separately** if you downloaded SRT/VTT files in the transcript step:
    ```bash
-   ffmpeg -i "summaries/<slug>/<id>.mkv" -i "transcripts/<id>.srt" \
-     -c copy -c:s srt "summaries/<slug>/<id>_with_subs.mkv"
-   mv "summaries/<slug>/<id>_with_subs.mkv" "summaries/<slug>/<id>.mkv"
+   ffmpeg -i "local/summaries/<slug>/<id>.mkv" -i "local/transcripts/<id>.srt" \
+     -c copy -c:s srt "local/summaries/<slug>/<id>_with_subs.mkv"
+   mv "local/summaries/<slug>/<id>_with_subs.mkv" "local/summaries/<slug>/<id>.mkv"
    ```
 
 #### Other sources
@@ -161,7 +163,7 @@ Use `yt-dlp -f "bestvideo+bestaudio/best" --merge-output-format mkv` as the gene
 
 Confirm the file exists and inspect streams:
 ```bash
-ffprobe -hide_banner "summaries/<slug>/<id>.mkv"
+ffprobe -hide_banner "local/summaries/<slug>/<id>.mkv"
 ```
 Expect a video stream, an audio stream, and (if subtitles were embedded) a subtitle stream.
 
@@ -173,7 +175,7 @@ Unlike the screen-capture video (which is temporary), the archival `.mkv` is the
 
 The `.mkv` file lives alongside the summary markdown:
 ```
-summaries/<slug>/
+local/summaries/<slug>/
 ├── <id>.md
 ├── <id>.mkv
 └── images/

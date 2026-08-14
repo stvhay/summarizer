@@ -12,7 +12,7 @@ GitHub Gist renders three prominent elements: the **filename** (as page title), 
 
 ## Gist-Adapted Front Matter
 
-The canonical summary in `summaries/` uses a multi-line bold metadata block (Source, Speaker, Date, Duration). For gist display, adapt the front matter into a plain-text metadata block with explicit labels, linked author, and `<br>` line breaks. Do not use a blockquote — the left bar makes metadata look like a quotation.
+The canonical summary in `local/summaries/` uses a multi-line bold metadata block (Source, Speaker, Date, Duration). For gist display, adapt the front matter into a plain-text metadata block with explicit labels, linked author, and `<br>` line breaks. Do not use a blockquote — the left bar makes metadata look like a quotation.
 
 ```markdown
 # Video Title Here
@@ -53,7 +53,7 @@ Write the adapted version to a temp file named `<slug>.md` for the gist — don'
    ```
 4. **Copy images flat to the gist root** — gists reject pushes containing directories:
    ```bash
-   cp summaries/<slug>/images/*.jpg /tmp/gist-<slug>/
+   cp local/summaries/<slug>/images/*.jpg /tmp/gist-<slug>/
    ```
 5. **Rewrite image paths** in the markdown from `images/slide-` to absolute raw URLs:
    ```
