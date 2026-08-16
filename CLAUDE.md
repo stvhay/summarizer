@@ -37,17 +37,41 @@ If the request does not name a source, inspect `local/inbox/` before requesting 
      ```
      Runs ~10x realtime. Models live in `local/models/` (untracked) — download from [ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp) if missing. **ASR output is noisy**: treat every proper noun and technical term as suspect and correct it against slides and primary sources during the factual accuracy review. Name ASR transcripts `<id>.asr.srt` to distinguish them from real subtitles.
 3. Convert subtitles to a readable timestamped transcript. For JSON3, extract `events[].segs[].utf8` and compute timestamps from `tStartMs`. For SRT, parse timestamp lines and text blocks. Save as `local/transcripts/<id>.transcript.txt`.
-4. Read the full transcript.
+4. Read the full transcript, then choose the dominant **Summary Profile** below. For mixed material, use the dominant structure and apply academic/technical rigor to sections that need it.
 5. Derive a human-readable slug from the video title (lowercase, hyphens, 4-6 key words — e.g., `frontier-operations-five-skills-tiny-teams`). Create a directory `local/summaries/<slug>/` and write the summary to `local/summaries/<slug>/<id>.md`.
 6. **Factual accuracy review** (for academic/technical lectures — see details below).
 7. **Visual review and screen capture** (see details below).
 8. **Archive video** — download highest-quality video+audio as `.mkv` (see details below).
-9. Run `/writing-clearly-and-concisely` on the finished summary as a final editing pass.
+9. After the structure, claims, attribution, and quotations are stable, run `/writing-clearly-and-concisely` once as the final editing pass. Then recheck quote fidelity, attribution, metadata, links, and chronological timestamp order; copy-editing must not change meaning or navigation.
 10. **Clean up transcript artifacts** — remove all intermediate files for this video from `local/transcripts/`:
     ```bash
     rm -f local/transcripts/<id>.*
     ```
     The metadata, subtitles, and plaintext transcript are all re-downloadable. Subtitles are embedded in the archival `.mkv`.
+
+## Summary Profiles
+
+Choose structure by content, not platform. Do not force one template onto every video.
+
+### Interviews, News, Podcasts, and Informative Videos
+
+Optimize for comprehension and scanning rather than a minute-by-minute retelling.
+
+- Lead with one compact `## Bottom line`, usually four to six items. Give each item a standalone bold thesis followed by a separate short explanation. Do not repeat the same synthesis in an executive summary or closing section.
+- Organize the detailed body around the conversation's main claims and tensions. Preserve attribution, disagreement, uncertainty, disclosures, recommendations, and concrete examples.
+- Put selective timestamp links in the corresponding major section headings, such as `## Autonomous agents cross a line · [13:05](...)`. Mark substantive transitions; skip sponsor breaks and minor asides. Add a separate chapter list only when requested.
+- Quote sparingly and verify every blockquote against the transcript. Paraphrase the rest.
+- Verify independently checkable claims when their truth affects the summary. If verification is unnecessary or unavailable, attribute the claim to the speaker instead of presenting it as established fact.
+- Include visuals only when they convey information absent from the conversation, such as a chart, diagram, slide, or significant on-screen text. Omit talking heads, studio shots, and decorative frames.
+
+### Academic Lectures and Technical Presentations
+
+Prioritize precision and explanatory completeness over inverted-pyramid brevity.
+
+- Do not force the interview/news `Bottom line` format when concepts depend on earlier definitions. A short orientation may precede a body organized by the lecture's or paper's logical structure.
+- Preserve definitions, assumptions, notation, methods, evidence, results, and limitations. Distinguish proved results, experimental findings, conjectures, speculation, and the speaker's interpretation.
+- Apply the primary-source factual review below. Technical accuracy, result status, and references outrank compression.
+- Capture equations, diagrams, tables, and slides when the prose alone would not make the explanation self-contained.
 
 ## Factual Accuracy Review (Academic/Technical Lectures)
 
@@ -78,7 +102,7 @@ ASR transcripts of math-heavy talks are noisy. A speaker says "Cauchy-Schwarz" a
 
 ## Visual Review and Screen Capture
 
-After writing the summary, review the video for visual content worth including (slides, charts, diagrams, screen shares, on-screen text/graphics). Images make summaries self-contained — a reader shouldn't need to watch the video to see a referenced chart.
+After writing the summary, review the video for visuals that carry information the prose cannot efficiently preserve (slides, charts, diagrams, screen shares, on-screen text/graphics). Captures should make the summary more self-contained, not decorate it.
 
 ### Process
 
@@ -88,7 +112,7 @@ After writing the summary, review the video for visual content worth including (
      -o "local/transcripts/<id>.video.mp4" --merge-output-format mp4 <url>
    ```
 2. **Sample frames** — extract ~10-12 evenly spaced frames across the video using ffmpeg. Use Claude vision to review them and determine the visual style (talking head, slides, mixed, screenshare, etc.).
-3. **Decide whether captures are needed.** If the video is pure talking-head with no on-screen visuals, skip extraction and note "No visual content to capture" in the process. Many YouTube videos (especially monologues and podcasts) have no capture-worthy visuals.
+3. **Decide whether captures are needed.** Skip talking heads, studio shots, and visuals that merely illustrate what the conversation already says; note "No visual content to capture" in the process. For academic and technical material, retain legible equations, diagrams, result tables, and slides needed to follow the argument.
 4. **If visuals exist**, cross-reference the transcript to identify timestamps where key visual content appears (slide transitions, chart displays, diagram reveals, significant on-screen text). Extract candidate frames at those timestamps:
    ```bash
    ffmpeg -ss <timestamp> -i local/transcripts/<id>.video.mp4 -frames:v 5 -q:v 2 /tmp/candidate_%03d.jpg
@@ -191,9 +215,9 @@ Key constraints: gists don't support directories (images go at root), use absolu
 ## Writing Standards
 
 - Front matter: title, source URL, speaker, date, duration.
-- Structured with headers, bullet points, and blockquotes for key statements.
+- Structured with headers, bullet points, and occasional blockquotes for key statements.
 - Capture all substantive claims, frameworks, advice, and examples.
-- Use the speaker's own language for key terms and phrases.
+- Use the speaker's own language for key terms and phrases; quote only wording verified against the transcript.
 - Preserve concrete examples — they're the difference between "I get it" and "I could explain it."
 - No filler or padding. Dense, scannable, useful.
 

@@ -51,7 +51,7 @@ Paste a video URL and Claude Code follows the workflow defined in `CLAUDE.md`. F
 
 1. Fetches metadata and subtitles via `yt-dlp`
 2. Converts subtitles to a readable transcript
-3. Writes a structured summary with the speaker's own framework
+3. Chooses a genre-aware structure: inverted-pyramid for interviews/news, dependency-led for academic/technical talks
 4. Verifies claims against primary sources (for academic/technical talks)
 5. Extracts and optimizes key slides and diagrams
 6. Archives highest-quality video+audio as `.mkv`
