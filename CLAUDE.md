@@ -47,6 +47,12 @@ If the request does not name a source, inspect `local/inbox/` before requesting 
 8. After structure, claims, attribution, and quotations are stable, run `/writing-clearly-and-concisely` once as the final editing pass. Recheck quote fidelity, attribution, metadata, links, and chronological timestamp order; copy-editing must not change meaning or navigation.
 9. **Verify before cleanup.** Run the archive check below, review the summary and image links, and compare preserved provenance files against their originals with `cmp`. Only then remove an explicit list of this run's disposable files (WAV, candidate frames, and verified duplicate sidecars). Do not use an ID-prefix deletion glob. On any failure, preserve intermediates and the original archive; report incomplete work.
 
+### Optional mechanical helper
+
+`scripts/media-prep.py` provides `prepare`, `capture`, and read-only `verify`; see [README.md](README.md#mechanical-preparation-helper) for the CLI and Python 3.11+ prerequisite. It uses the shared archive policy, source-owned workspaces, source subtitles before ASR, preserved provenance, verified embedding, and batched candidate captures. Use it only for new helper-owned workspaces, not to adopt or alter existing manual archives.
+
+A successful helper result completes mechanical preparation only. Still read the full transcript, choose a profile, review primary sources and visuals, write the summary, and perform the final editing and summary/link checks above. Its manifest and logs are local/private. Blocked results preserve partial work; follow the reported conflict or prerequisite instead of bypassing it. The helper never performs the final cleanup or publishes anything.
+
 ## Summary Profiles
 
 Choose structure by content, not platform. Do not force one template onto every video.

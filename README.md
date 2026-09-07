@@ -26,7 +26,7 @@ direnv allow    # loads tools from flake.nix, including whisper-cpp
 Install the dependencies:
 
 ```bash
-brew install yt-dlp ffmpeg imagemagick mkvtoolnix
+brew install yt-dlp ffmpeg imagemagick mkvtoolnix python
 ```
 
 Then clone and allow direnv:
@@ -67,6 +67,41 @@ Paste a video URL; the agent follows `CLAUDE.md`. For local video material witho
 
 Works with YouTube, archive.org, and any other site [yt-dlp supports](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
 
+## Mechanical preparation helper
+
+Requires Python **3.11+**, ffmpeg, ffprobe, and Bash; online sources also need yt-dlp. Python is explicit in the Nix shell and Homebrew setup. After changing `flake.nix`, restart the session so direnv reloads it.
+
+From the repository root:
+
+```bash
+python3 scripts/media-prep.py prepare 'https://www.youtube.com/watch?v=VIDEO_ID' \
+  --slug four-to-six-title-words
+python3 scripts/media-prep.py prepare '/absolute/path/recording.mp4' \
+  --slug four-to-six-title-words --subtitles '/absolute/path/captions.srt'
+python3 scripts/media-prep.py capture local/summaries/four-to-six-title-words
+python3 scripts/media-prep.py capture local/summaries/four-to-six-title-words --at 120 245.5
+python3 scripts/media-prep.py verify local/summaries/four-to-six-title-words
+```
+
+- `prepare` acquires one archive using the shared policy, selects source subtitles before ASR, preserves provenance, writes a timestamped transcript, and verifies subtitle embedding. It does **not** write a summary.
+- Supply a 4–6-word lowercase title slug. Online IDs come from yt-dlp; local IDs default to a content-hash prefix (`--id` overrides). Local metadata options: `--title`, `--speaker`, `--date`, `--source-url`; unknown speaker/date/URL remain null.
+- `--subtitles` accepts SRT, VTT, or JSON3. Embedded text tracks are selected by `--language` (default `en`), or use `--subtitle-stream INDEX` for an ambiguous/nonmatching track. VTT uses ffmpeg's parser; JSON3 uses source event timing without deduplicating rolling captions. Inspect the full transcript.
+- When no source subtitles exist, ASR requires `whisper-cli` and `--model` (default `local/models/ggml-large-v3-turbo.bin`). Missing prerequisites preserve the archive and metadata. For archive.org, first check the item's download page and pass a downloaded sidecar; use `--source-subtitles-checked` only after finding none usable.
+- `capture` returns 12 overview frames by default, or five-frame bursts at each requested time in seconds. Candidates stay in `local/transcripts/<id>.prep/`; visual judgment, image selection and optimization remain agent-owned. Bursts too near the end fail and retain partial frames.
+- `verify` is read-only: it checks artifact hashes, provenance copies, archive structure, embedded cue text/timing and retained pre-subtitle media. It does not certify ASR accuracy, full playback, summary claims, links or human review.
+
+Commands return compact JSON with artifact/log paths and warnings; runtime failures return `status: blocked` and exit 1. Invalid CLI usage prints argparse help/errors and exits 2. `--workspace` changes the artifact root (default `local`). Paths must not traverse symlinks; use their real paths. Logs, metadata and manifests are private local artifacts and may contain signed URLs. Do not publish them.
+
+### Preservation and resumption
+
+The helper creates a source-owned `.media-prep.json` in the summary directory and reserves `local/transcripts/<id>.prep/`. It refuses existing unowned directories, conflicting IDs, changed recorded artifacts, symlink paths and concurrent work. It does not adopt older manually prepared summaries.
+
+Rerun the same `prepare` command to resume verified stages. Before subtitle selection completes, you may supply a newly found sidecar or missing model. After selection, a different subtitle input is a conflict. Unrecorded/partial outputs stop automatic resumption: inspect them manually; never delete them blindly. Successful repeated preparation and capture reuse their recorded outputs.
+
+Initial local remux checks stream properties and packet payloads, allowing up to one second of container duration change (for example, AAC priming timestamps). Subtitle embedding uses stricter checks: unchanged original packet payloads and PTS/DTS/durations, matching subtitle cues, and at most 50 ms overall duration change. Original subtitle bytes are preserved; cue comparison permits ffmpeg's removal of leading cue whitespace. A verified candidate replaces only the helper-owned archive, retaining `<id>.pre-subs.mkv`. No explicit cleanup or publishing command exists. yt-dlp may remove its own component streams after a successful merge.
+
+Hash checks read every recorded artifact; packet comparison holds one stream's packet listing in memory. This favors conservative verification over fast resume for large recordings. No latency or quality improvement is claimed.
+
 ## Output
 
 Each summary lives in its own directory under `local/summaries/`:
@@ -94,9 +129,11 @@ local/summaries/<slug>/
 
 - `scripts/archive.conf`: native yt-dlp quality-first selection and Matroska output policy.
 - `scripts/verify-archive.sh`: read-only structural check; requires video, audio, and subtitles by default. Does not prove full decode or subtitle fidelity.
+- `scripts/media-prep.py`: source-owned mechanical preparation, candidate capture and read-only verification.
 - `tests/check-workflow.sh`: offline regression checks using synthetic formats and tiny media files.
+- `tests/check-media-prep.py`: preparation/resume/conflict checks with real ffmpeg/ffprobe and yt-dlp on loopback HTTP; a fake Whisper executable checks only the ASR command/output contract.
 
-Run checks with `bash tests/check-workflow.sh`. No network, new test framework, or existing local media required.
+Run `bash tests/check-workflow.sh` and `python3 tests/check-media-prep.py`. No Internet, new test framework, or existing local media required. Live hosts and real ASR quality are not covered by these checks.
 
 ## Contributing
 
