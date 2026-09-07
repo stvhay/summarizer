@@ -26,7 +26,7 @@ direnv allow    # loads tools from flake.nix, including whisper-cpp
 Install the dependencies:
 
 ```bash
-brew install uv yt-dlp ffmpeg imagemagick mkvtoolnix python
+brew install uv node yt-dlp ffmpeg imagemagick mkvtoolnix python
 ```
 
 Then clone and allow direnv:
@@ -69,7 +69,7 @@ Works with YouTube, archive.org, and any other site [yt-dlp supports](https://gi
 
 ## Mechanical preparation helper
 
-Requires Python **3.11+**, ffmpeg, ffprobe, and Bash; online sources also need **uv**. Python and uv are explicit in the Nix shell and Homebrew setup. After changing `flake.nix`, restart the session so direnv reloads it.
+Requires Python **3.11+**, ffmpeg, ffprobe, and Bash; online sources also need **uv and Node.js**. Python, uv and Node.js are explicit in the Nix shell and Homebrew setup. After changing `flake.nix`, restart the session so direnv reloads it.
 
 Online metadata, archives and subtitles use `scripts/yt-dlp.sh`. This launcher refreshes the [latest official GitHub nightly](https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest) through uv on each invocation, with yt-dlp's default Python dependencies. It runs in an isolated environment and ignores Python import paths that could load an older Nix package. It does not update global packages or the Nix store. Resolution/install failures stop preparation; there is no fallback to the installed yt-dlp. GitHub and dependency-index access are required. Nightlies can regress; this is deliberately not a pinned runtime.
 
@@ -80,7 +80,7 @@ bash scripts/yt-dlp.sh --version
 bash scripts/yt-dlp.sh --ignore-config -F 'https://www.youtube.com/watch?v=VIDEO_ID'
 ```
 
-Local preparation, capture, verification and completed resume do not refresh yt-dlp. The packaged `yt-dlp` remains available for offline regression checks. A supported JavaScript runtime may also be needed by YouTube; the Python package does not install one.
+Local preparation, capture, verification and completed resume do not refresh yt-dlp. The packaged `yt-dlp` remains available for offline regression checks. The launcher explicitly enables Node.js (`--js-runtimes node`) for YouTube challenges; the Python package does not install Node. Nix and Homebrew setup provide it.
 
 From the repository root:
 
@@ -107,7 +107,18 @@ Commands return compact JSON with artifact/log paths and warnings; runtime failu
 
 The helper creates a source-owned `.media-prep.json` in the summary directory and reserves `local/transcripts/<id>.prep/`. It refuses existing unowned directories, conflicting IDs, changed recorded artifacts, symlink paths and concurrent work. It does not adopt older manually prepared summaries.
 
-Rerun the same `prepare` command to resume verified stages. Before subtitle selection completes, you may supply a newly found sidecar or missing model. After selection, a different subtitle input is a conflict. Unrecorded/partial outputs stop automatic resumption: inspect them manually; never delete them blindly. Successful repeated preparation and capture reuse their recorded outputs.
+Rerun the same `prepare` command to resume verified stages. Before subtitle selection completes, you may supply a newly found sidecar or missing model. After selection, a different subtitle input is a conflict. After ordinary downloader failures, the manifest records pending output hashes separately from completed artifacts. Unchanged partial/component files can resume; missing, changed, unrecorded or symlinked files block before another download. Abrupt termination before hashes save (SIGKILL or power loss) still requires inspection. Other partial outputs remain blocked; never delete them blindly. Successful repeated preparation and capture reuse their recorded outputs.
+
+For an **existing helper-owned workspace completed manually**, use explicit recovery—not hash edits or another download:
+
+```bash
+python3 scripts/media-prep.py recover local/summaries/four-to-six-title-words \
+  --source 'EXACT_RECORDED_SOURCE' --archive-sha256 'INSPECTED_FINAL_ARCHIVE_SHA256' \
+  --subtitles local/transcripts/VIDEO_ID.en.srt \
+  --provenance local/transcripts/VIDEO_ID.en.json3
+```
+
+Inspect source identity and archive first; the supplied hash binds that decision, not proof of remote origin. Recovery requires the retained `<id>.pre-subs.mkv`, original metadata and timestamped transcript, an original SRT, and identical copies beside the archive. Optional `--provenance` lists extra original sidecars to verify and record. Originals must be in that source's transcript/prep workspace. Recovery checks existing ownership hashes, source/duration, original media packets, embedded subtitle text/timing, transcript content/timestamps and provenance before updating only the manifest. It cannot repair changed recorded files or adopt an unowned directory. Failure preserves files and manifest; unrelated files and historical partials remain untouched and unadopted. Resume afterward without `--subtitles`, or supply the SRT path used for recovery.
 
 Initial local remux checks stream properties and packet payloads, allowing up to one second of container duration change (for example, AAC priming timestamps). Subtitle embedding uses stricter checks: unchanged original packet payloads and PTS/DTS/durations, matching subtitle cues, and at most 50 ms overall duration change. Original subtitle bytes are preserved; cue comparison permits ffmpeg's removal of leading cue whitespace. A verified candidate replaces only the helper-owned archive, retaining `<id>.pre-subs.mkv`. No explicit cleanup or publishing command exists. yt-dlp may remove its own component streams after a successful merge.
 

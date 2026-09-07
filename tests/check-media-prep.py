@@ -58,9 +58,14 @@ assert args[:9] == ['--no-config', 'tool', 'run', '--isolated', '--refresh', '--
     'yt-dlp[default] @ https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.tar.gz',
     'python', '-I'], args
 assert args[9:11] == ['-m', 'yt_dlp'], args
+assert args[11:13] == ['--js-runtimes', 'node'], args
 with Path({str(uv_log)!r}).open('a') as log:
     log.write(json.dumps(args[11:]) + '\\n')
 if os.environ.get('TEST_UV_FAIL'):
+    sys.exit(19)
+if os.environ.get('TEST_DOWNLOAD_FAIL') and '--config-locations' in args:
+    template = args[args.index('-o') + 1]
+    Path(template.replace('%(ext)s', 'mp4.part')).write_bytes(b'partial transfer')
     sys.exit(19)
 os.execv({shutil.which('yt-dlp')!r}, ['yt-dlp', *args[11:]])
 ''')
@@ -70,7 +75,7 @@ os.execv({shutil.which('yt-dlp')!r}, ['yt-dlp', *args[11:]])
         version = subprocess.run(["bash", str(wrapper), "--version"], capture_output=True)
         assert version.returncode == 0, version.stderr
         assert version.stdout == run("yt-dlp", "--version")
-        assert json.loads(uv_log.read_text().splitlines()[-1]) == ["--version"]
+        assert json.loads(uv_log.read_text().splitlines()[-1]) == ["--js-runtimes", "node", "--version"]
         failed = subprocess.run(["bash", str(wrapper), "--version"], capture_output=True,
                                 env={**os.environ, "TEST_UV_FAIL": "1"})
         assert failed.returncode == 19 and not failed.stdout, "refresh failure fell back to installed yt-dlp"
@@ -102,6 +107,111 @@ os.execv({shutil.which('yt-dlp')!r}, ['yt-dlp', *args[11:]])
         assert tree(workspace) == before, "verify wrote files"
         cli(*args)
         assert tree(workspace) == before, "completed resume wrote files"
+        # Failed downloads retain hashed ownership, not a completed output claim.
+        from types import SimpleNamespace
+        pending_args = SimpleNamespace(workspace=workspace, slug="test-pending-download-recording", id="pending")
+        work = helper.initialize(pending_args, {"source": "https://example.invalid/pending"}, {"id": "pending"})
+        prefix = work.directory / "pending"
+        component = work.directory / "pending.f1.webm.part"
+        def fail_download():
+            component.write_bytes(b"partial")
+            raise ValueError("download failed")
+        try:
+            work.download(prefix, fail_download)
+        except ValueError as error:
+            assert str(error) == "download failed"
+        assert work.data["pending_downloads"][work.key(component)] == digest(component)
+        assert work.key(component) not in work.data["files"]
+        component.write_bytes(b"changed")
+        before = tree(workspace)
+        try:
+            work.download(prefix, lambda: None)
+        except ValueError as error:
+            assert "changed" in str(error).lower()
+        else:
+            raise AssertionError("changed pending file accepted")
+        assert tree(workspace) == before
+        component.write_bytes(b"partial")
+        def finish_download():
+            assert component.read_bytes() == b"partial"
+            component.rename(work.directory / "pending.webm")
+        work.download(prefix, finish_download)
+        assert work.key(component) not in work.data["pending_downloads"]
+        assert work.key(work.directory / "pending.webm") in work.data["pending_downloads"]
+        unowned = work.directory / "pending.keep"
+        unowned.write_text("unrelated")
+        before = tree(workspace)
+        try:
+            work.download(prefix, lambda: None)
+        except ValueError as error:
+            assert "Unrecorded" in str(error)
+        else:
+            raise AssertionError("unrecorded file adopted")
+        assert tree(workspace) == before
+        link = work.directory / "pending.link"
+        outside_download = tmp / "outside-download"
+        link.symlink_to(outside_download)
+        try:
+            work.download(prefix, lambda: None)
+        except ValueError as error:
+            assert "Symlink" in str(error)
+        else:
+            raise AssertionError("symlink download accepted")
+        assert not outside_download.exists()
+        work.lock.close()
+        # Explicit recovery validates completed media and provenance before any write.
+        manifest = summary / ".media-prep.json"
+        completed = json.loads(manifest.read_text())
+        incomplete = {**completed, "ready": False, "files": {k: v for k, v in completed["files"].items() if k.endswith(".meta.json")}}
+        for key in ("selection", "subtitle", "subtitle_index", "copies"):
+            incomplete.pop(key)
+        manifest.write_text(json.dumps(incomplete))
+        recovery = ("recover", summary, "--source", str(source), "--archive-sha256", digest(archive),
+                    "--subtitles", workspace / "transcripts/fixture.prep/lecture.srt")
+        before = tree(workspace)
+        blocked = cli(*recovery, "--source", "wrong-source", ok=False)
+        assert "Source" in blocked["error"] and tree(workspace) == before
+        cli(*recovery, "--archive-sha256", "0" * 64, ok=False)
+        assert tree(workspace) == before
+        preserved = summary / "fixture.transcript.txt"
+        saved = preserved.read_bytes()
+        preserved.write_text("wrong transcript")
+        before = tree(workspace)
+        cli(*recovery, ok=False)
+        assert tree(workspace) == before
+        preserved.write_bytes(saved)
+        # An external edit after parsing must not become the recorded baseline.
+        recovery_raw = workspace / "transcripts/fixture.prep/lecture.srt"
+        raw_bytes = recovery_raw.read_bytes()
+        parse = helper.srt_cues
+        def edit_after_parse(text):
+            cues = parse(text)
+            replacement = raw_bytes.replace(b"First line", b"Other line")
+            recovery_raw.write_bytes(replacement)
+            (summary / "lecture.srt").write_bytes(replacement)
+            return cues
+        helper.srt_cues = edit_after_parse
+        try:
+            try:
+                helper.recover(SimpleNamespace(directory=summary, source=str(source), archive_sha256=digest(archive),
+                                               subtitles=recovery_raw, provenance=[]))
+            except ValueError:
+                assert not json.loads(manifest.read_text())["ready"]
+            else:
+                raise AssertionError("recovery committed stale subtitle verification")
+        finally:
+            helper.srt_cues = parse
+            recovery_raw.write_bytes(raw_bytes)
+            (summary / "lecture.srt").write_bytes(raw_bytes)
+        before = tree(workspace)
+        cli(*recovery)
+        after = tree(workspace)
+        assert {k: v for k, v in before.items() if not k.endswith(".media-prep.json")} == {k: v for k, v in after.items() if not k.endswith(".media-prep.json")}
+        cli("verify", summary)
+        cli(*recovery)
+        assert tree(workspace) == after, "repeated recovery wrote files"
+        cli(*args[:-2])
+        assert tree(workspace) == after, "recovered prepare wrote files"
         # Structural validity is insufficient: packet content and subtitle timing must match.
         changed = tmp / "changed.mkv"
         run("ffmpeg", "-v", "error", "-nostdin", "-i", source, "-vf", "negate", "-c:v", "ffv1", "-c:a", "copy", changed)
@@ -176,6 +286,15 @@ os.execv({shutil.which('yt-dlp')!r}, ['yt-dlp', *args[11:]])
         thread.start()
         try:
             url = f"http://127.0.0.1:{server.server_port}/online.mp4"
+            retry_workspace = tmp / "retry"
+            retry_args = ("prepare", url, "--workspace", retry_workspace, "--slug", "test-retry-video-recording", "--subtitles", vtt)
+            cli(*retry_args, ok=False, env={**os.environ, "TEST_DOWNLOAD_FAIL": "1"})
+            retry_manifest = retry_workspace / "summaries/test-retry-video-recording/.media-prep.json"
+            pending = json.loads(retry_manifest.read_text())
+            assert len(pending["pending_downloads"]) == 1 and not pending["ready"]
+            retry_result = cli(*retry_args)
+            cli("verify", retry_result["directory"])
+            assert not json.loads(retry_manifest.read_text())["pending_downloads"]
             result = cli("prepare", url, "--workspace", workspace, "--slug", "test-online-video-recording", "--subtitles", vtt)
             (tmp / "lecture.html").write_text('<title>Subtitle source test lecture</title><video controls src="/online.mp4"><track src="/source.vtt" kind="subtitles" srclang="en" label="English"></video>')
             downloaded = cli("prepare", f"http://127.0.0.1:{server.server_port}/lecture.html", "--workspace", workspace, "--slug", "test-downloaded-subtitle-recording", "--model", tmp / "missing.bin")

@@ -153,7 +153,7 @@ class Work:
         return str(path.relative_to(self.workspace))
 
     def check_files(self):
-        for relative, expected in self.data["files"].items():
+        for relative, expected in (self.data["files"] | self.data.get("pending_downloads", {})).items():
             path = self.path(relative)
             require(path.is_file() and sha(path) == expected, f"Missing/changed recorded artifact: {path}")
 
@@ -169,12 +169,31 @@ class Work:
         path = self.path(self.key(path))
         key = self.key(path)
         if key not in self.data["files"]:
-            require(not path.exists(), f"Unrecorded artifact; inspect before resuming: {path}")
+            require(not path.exists() or key in self.data.get("pending_downloads", {}), f"Unrecorded artifact; inspect before resuming: {path}")
             produce(path)
             require(path.is_file() and path.stat().st_size, f"Missing/empty output: {path}")
             self.data["files"][key] = sha(path)
+            self.data.get("pending_downloads", {}).pop(key, None)
             self.save()
         return path
+
+    def download(self, prefix, produce):
+        self.check_files()
+        pending = self.data.get("pending_downloads", {})
+        def outputs():
+            paths = [self.path(self.key(p)) for p in prefix.parent.glob(prefix.name + ".*")]
+            require(all(p.is_file() for p in paths), "Non-file download output refused")
+            return {self.key(p): p for p in paths if self.key(p) not in self.data["files"]}
+        before = outputs()
+        require(all(key in pending for key in before), "Unrecorded download files; inspect before resuming")
+        try:
+            produce()
+        finally:
+            # Ordinary downloader failures are resumable; SIGKILL/power loss still fail closed.
+            after = outputs()
+            self.data["pending_downloads"] = {k: v for k, v in pending.items() if k not in before}
+            self.data["pending_downloads"].update({key: sha(path) for key, path in after.items()})
+            self.save()
 
     def text(self, path, text):
         def write(destination):
@@ -239,16 +258,16 @@ def verify(work):
 def online_subtitles(work, args):
     prefix = work.prep / (work.data["id"] + ".source")
     if not work.data.get("subtitle_search_done"):
-        require(not list(work.prep.glob(prefix.name + ".*")), "Unrecorded subtitle download; inspect before resuming")
         youtube = "youtube" in work.data["metadata"].get("extractor", "").lower()
-        run([*YTDLP, "--ignore-config", "--no-playlist", "--no-overwrites", "--write-subs", "--write-auto-subs",
+        work.download(prefix, lambda: run([*YTDLP, "--ignore-config", "--no-playlist", "--no-overwrites", "--write-subs", "--write-auto-subs",
              "--sub-langs", args.language, "--sub-format", "json3" if youtube else "srt/vtt/best", "--skip-download",
-             "-o", str(prefix).replace("%", "%%"), "--", args.source], work.log)
+             "-o", str(prefix).replace("%", "%%"), "--", args.source], work.log))
         paths = sorted(work.prep.glob(prefix.name + ".*"))
         require(all(p.suffix in (".srt", ".vtt", ".json3") and p.is_file() for p in paths), "Unsupported downloaded subtitles; supply --subtitles FILE")
         require(len(paths) <= 1, "Multiple downloaded subtitles; select one with --subtitles FILE")
         for path in paths:
             work.data["files"][work.key(safe_path(path))] = sha(path)
+            work.data.get("pending_downloads", {}).pop(work.key(path), None)
         work.data["downloaded_subtitles"] = [work.key(p) for p in paths]
         work.data["subtitle_search_done"] = True
         work.save()
@@ -351,9 +370,8 @@ def prepare(args):
     work.copy(meta, work.directory / meta.name)
     if remote:
         def download(path):
-            require(not [p for p in work.directory.glob(ident + ".*") if work.key(p) not in work.data["files"]], "Unrecorded download files; inspect before resuming")
-            run([*YTDLP, "--ignore-config", "--config-locations", ROOT / "scripts/archive.conf", "-o",
-                 str(path.with_suffix("")).replace("%", "%%") + ".%(ext)s", "--", source], work.log)
+            work.download(path.with_suffix(""), lambda: run([*YTDLP, "--ignore-config", "--config-locations", ROOT / "scripts/archive.conf", "-o",
+                 str(path.with_suffix("")).replace("%", "%%") + ".%(ext)s", "--", source], work.log))
         work.output(archive, download)
     else:
         work.output(archive, lambda p: run([*FFMPEG, "-i", source, "-map", "0", "-c", "copy", p], work.log))
@@ -387,6 +405,66 @@ def prepare(args):
     work.data.update(ready=True, subtitle=work.key(normalized), subtitle_index=index, copies=copies)
     work.save()
     return verify(work)
+
+
+def recover(args):
+    """Adopt explicitly inspected completion, never arbitrary partial files."""
+    work = Work(args.directory)
+    require(args.source == work.data["identity"]["source"], "Source differs from recorded owner")
+    ident = work.data["id"]
+    archive = work.path(work.key(work.directory / (ident + ".mkv")))
+    require(re.fullmatch(r"[0-9a-f]{64}", args.archive_sha256 or ""), "Expected archive SHA-256 required")
+    require(sha(archive) == args.archive_sha256, "Archive differs from expected SHA-256")
+    if work.data["ready"]:
+        require(work.path(work.data["subtitle"]) == safe_path(args.subtitles), "Subtitle differs from recovered selection")
+        return verify(work)
+    raw = work.path(work.key(safe_path(args.subtitles)))
+    require(raw.suffix == ".srt", "Recovery requires preserved SRT subtitles")
+    require(not work.data.get("selection") or work.data["selection"]["raw"] == work.key(raw), "Subtitle differs from recorded selection")
+    original = work.path(work.key(work.directory / (ident + ".pre-subs.mkv")))
+    require(original.is_file(), "Recovery requires retained pre-subtitle archive")
+    meta = work.path("transcripts/" + ident + ".meta.json")
+    transcript = work.path("transcripts/" + ident + ".transcript.txt")
+    # Snapshot every input before consuming it; external writers do not honor our lock.
+    copies, files = [], dict(work.data["files"])
+    for source in (meta, raw, transcript, *(safe_path(p) for p in args.provenance)):
+        source = work.path(work.key(source))
+        destination = work.path(work.key(work.directory / source.name))
+        require(source != destination, "Recovery needs original provenance outside summary directory")
+        copies.append([work.key(source), work.key(destination)])
+        for path in (source, destination):
+            files[work.key(path)] = sha(path)
+        require(files[work.key(source)] == files[work.key(destination)], "Preserved provenance differs")
+    for path in (archive, original):
+        files[work.key(path)] = sha(path)
+    require(files[work.key(archive)] == args.archive_sha256, "Archive changed during recovery")
+    cues = srt_cues(raw.read_text(encoding="utf-8-sig"))
+    require(json.loads(meta.read_text()) == work.data["metadata"], "Metadata differs from recorded source")
+    require(work.data["metadata"]["id"] == ident, "Metadata source ID differs")
+    duration = float(probe(archive)["format"]["duration"])
+    expected_duration = float(work.data["metadata"]["duration"])
+    require(math.isfinite(duration) and duration > 0 and abs(duration - expected_duration) <= 1, "Archive duration differs from source metadata")
+    require(cues[-1][1] <= int(duration * 1000) + 1000, "Subtitle timing exceeds archive duration")
+    expected_text = "\n\n".join(f"[{stamp(start)}] {text}" for start, _, text in cues)
+    require(transcript.read_text().split() == expected_text.split(), "Transcript differs from subtitle cues")
+    if "sha256" in work.data["identity"]:
+        source = safe_path(args.source)
+        require(sha(source) == work.data["identity"]["sha256"], "Local source changed")
+        same_media(source, original, acquisition=True)
+    run(["bash", ROOT / "scripts/verify-archive.sh", archive])
+    same_media(original, archive)
+    matches = [s["index"] for s in probe(archive)["streams"] if s.get("codec_name") == "subrip"
+               and embedded_cues(archive, s["index"]) == cues]
+    require(len(matches) == 1, "Recovery requires exactly one matching embedded SRT track")
+    for key, expected in files.items():
+        require(sha(work.path(key)) == expected, "Artifact changed during recovery")
+    work.check_files()
+    work.data.update(ready=True, files=files, subtitle=work.key(raw), subtitle_index=matches[0], copies=copies,
+                     selection={"raw": work.key(raw), "input": str(raw), "sha256": files[work.key(raw)]},
+                     recovery={"source": args.source, "archive_sha256": args.archive_sha256})
+    work.data["pending_downloads"] = {k: v for k, v in work.data.get("pending_downloads", {}).items() if k not in files}
+    work.save()
+    return work.result()
 
 
 def capture(args):
@@ -425,6 +503,12 @@ def main():
     prep.add_argument("--language", default="en")
     prep.add_argument("--model", default="local/models/ggml-large-v3-turbo.bin")
     prep.add_argument("--source-subtitles-checked", action="store_true", help="Confirm archive.org direct sidecars were checked and none were usable")
+    recovery = commands.add_parser("recover", help="Verify explicitly inspected completion in an existing helper workspace; update manifest only")
+    recovery.add_argument("directory")
+    recovery.add_argument("--source", required=True, help="Exact recorded source")
+    recovery.add_argument("--archive-sha256", required=True, help="Expected hash of inspected final archive")
+    recovery.add_argument("--subtitles", required=True, help="Original SRT in source workspace, already copied beside archive")
+    recovery.add_argument("--provenance", nargs="*", default=[], help="Additional original sidecars with existing identical summary copies")
     for name in ("verify", "capture"):
         command = commands.add_parser(name)
         command.add_argument("directory", help="Summary directory created by prepare")
@@ -432,7 +516,7 @@ def main():
             command.add_argument("--at", nargs="+", type=float, help="Seconds; five-frame burst per time (default: 12 overview frames)")
     args = parser.parse_args()
     try:
-        result = prepare(args) if args.command == "prepare" else capture(args) if args.command == "capture" else verify(Work(args.directory, readonly=True))
+        result = prepare(args) if args.command == "prepare" else recover(args) if args.command == "recover" else capture(args) if args.command == "capture" else verify(Work(args.directory, readonly=True))
         print(json.dumps(result))
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(json.dumps({"status": "blocked", "error": str(error), "warnings": ["Partial files preserved; no cleanup performed."]}))
