@@ -10,44 +10,42 @@ On first use in a fresh clone, follow `docs/FIRST_RUN.md` to initialize project 
 
 ## Environment
 
-- **Dependencies**: Managed via `flake.nix`. Add packages to `buildInputs`.
-- **Initialization**: `.envrc` sources `use flake` and runs scripts from `.envrc.d/` and `.envrc.local.d/`.
+- **Dependencies**: Nix packages live in `flake.nix` (`buildInputs`). Homebrew setup is maintained separately in `README.md`; do not require identical package lists.
+- **Initialization**: `.envrc` uses the Nix flake when available; otherwise it checks core tools. It then runs scripts from `.envrc.d/` and `.envrc.local.d/`.
+- **Optional capabilities**: Before local transcription, check `command -v whisper-cli` and the model file. Before publishing, check `command -v gh` and authentication. If unavailable, preserve progress and request setup; do not silently skip the step.
 - `.envrc.d/setup.sh` creates `local/inbox/`, `local/transcripts/`, `local/summaries/`, and `local/models/` and exports their directory paths.
 - These directories are **local working directories** — not tracked in git. They're created on first `direnv allow`.
 - If you add a dependency to `flake.nix`, ask the user to restart the session so `direnv` reloads.
 
 ## Workflow
 
-If the request does not name a source, inspect `local/inbox/` before requesting input.
+This is the canonical workflow for every agent entry point. Run commands from the repository root; replace placeholders with quoted paths and URLs.
 
-1. Fetch video metadata: `yt-dlp --dump-json --no-download <url> > local/transcripts/<id>.meta.json`
-   - For archive.org, redirect stderr (`2>/dev/null`) as yt-dlp emits harmless warnings about non-numeric fields.
-2. Download subtitles. Format depends on the source:
+If the request does not name a source, inspect `local/inbox/` before requesting input. Scope every mutation to that source. Preserve unrelated instructions, models, transcripts, summaries, and local media. If input, access, or a required tool is unavailable, preserve partial work and request what is missing rather than bypassing the workflow.
+
+1. **Identify the source and destination.** Fetch online metadata with `yt-dlp --no-playlist --dump-json --no-download "<url>"`; save it as `local/transcripts/<id>.meta.json` after identifying the video ID. For local files, choose a stable ID and record the original filename, available title/speaker/date/source URL, and `ffprobe` duration in that JSON file; mark unknown fields rather than inventing them. Derive a 4–6-word lowercase hyphenated slug from the title and create `local/summaries/<slug>/`. Check existing files before writing: resume only a matching source; do not overwrite unrelated artifacts.
+2. **Acquire the archive once** using **Archival Video Acquisition** below. Use that `.mkv` for ASR and frame extraction; preserve the original local input. A separate preview download is an exception only when archive size makes it necessary, not the default.
+3. **Obtain subtitles.** Format depends on the source:
    - **YouTube**: JSON3 format (richer than VTT for parsing):
      ```bash
-     yt-dlp --write-auto-sub --sub-lang en --sub-format json3 --skip-download -o "local/transcripts/%(id)s" <url>
+     yt-dlp --no-playlist --write-subs --write-auto-sub --sub-lang en --sub-format json3 --skip-download -o "local/transcripts/<id>" "<url>"
      ```
    - **archive.org**: yt-dlp often doesn't detect archive.org subtitles. Check the item's download page (`https://archive.org/download/<id>/`) for `.srt` or `.vtt` files and download them directly with `curl`.
    - **Other sources**: Try `--write-auto-sub` first; fall back to `--write-sub` or direct download.
-   - **No subtitles anywhere** (login-walled sites, conference recordings, local files): transcribe locally with `whisper-cpp`. Extract 16 kHz mono audio, then run the model:
+   - **Local files**: inspect embedded subtitle tracks first and extract a suitable text track with ffmpeg. Use ASR only if no usable subtitles exist.
+   - **No subtitles anywhere** (login-walled sites, conference recordings, local files): check `whisper-cli` and the model are available, then transcribe locally. Extract 16 kHz mono audio from the archive:
      ```bash
-     ffmpeg -i <video> -vn -ac 1 -ar 16000 -c:a pcm_s16le local/transcripts/<id>.wav
+     ffmpeg -n -i "local/summaries/<slug>/<id>.mkv" -vn -ac 1 -ar 16000 -c:a pcm_s16le "local/transcripts/<id>.wav"
      whisper-cli -m local/models/ggml-large-v3-turbo.bin -f local/transcripts/<id>.wav \
        -l en -t 8 -osrt -of local/transcripts/<id>.asr
      ```
      Runs ~10x realtime. Models live in `local/models/` (untracked) — download from [ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp) if missing. **ASR output is noisy**: treat every proper noun and technical term as suspect and correct it against slides and primary sources during the factual accuracy review. Name ASR transcripts `<id>.asr.srt` to distinguish them from real subtitles.
-3. Convert subtitles to a readable timestamped transcript. For JSON3, extract `events[].segs[].utf8` and compute timestamps from `tStartMs`. For SRT, parse timestamp lines and text blocks. Save as `local/transcripts/<id>.transcript.txt`.
-4. Read the full transcript, then choose the dominant **Summary Profile** below. For mixed material, use the dominant structure and apply academic/technical rigor to sections that need it.
-5. Derive a human-readable slug from the video title (lowercase, hyphens, 4-6 key words — e.g., `frontier-operations-five-skills-tiny-teams`). Create a directory `local/summaries/<slug>/` and write the summary to `local/summaries/<slug>/<id>.md`.
-6. **Factual accuracy review** (for academic/technical lectures — see details below).
-7. **Visual review and screen capture** (see details below).
-8. **Archive video** — download highest-quality video+audio as `.mkv` (see details below).
-9. After the structure, claims, attribution, and quotations are stable, run `/writing-clearly-and-concisely` once as the final editing pass. Then recheck quote fidelity, attribution, metadata, links, and chronological timestamp order; copy-editing must not change meaning or navigation.
-10. **Clean up transcript artifacts** — remove all intermediate files for this video from `local/transcripts/`:
-    ```bash
-    rm -f local/transcripts/<id>.*
-    ```
-    The metadata, subtitles, and plaintext transcript are all re-downloadable. Subtitles are embedded in the archival `.mkv`.
+4. Convert subtitles to a readable timestamped transcript. For JSON3, extract `events[].segs[].utf8` and compute timestamps from `tStartMs`. For SRT/VTT, parse timestamp lines and text blocks. Save as `local/transcripts/<id>.transcript.txt`.
+5. **Preserve provenance and embed subtitles** using the instructions below. Keep metadata, readable transcript, and original subtitles (including `.asr.srt`) beside the summary. Generated ASR is not re-downloadable.
+6. Read the full transcript, choose the dominant **Summary Profile**, and write `local/summaries/<slug>/<id>.md`. For mixed material, use the dominant structure and apply academic/technical rigor where needed.
+7. **Factual accuracy review** for academic/technical lectures, then **visual review and screen capture** from the archive (see below).
+8. After structure, claims, attribution, and quotations are stable, run `/writing-clearly-and-concisely` once as the final editing pass. Recheck quote fidelity, attribution, metadata, links, and chronological timestamp order; copy-editing must not change meaning or navigation.
+9. **Verify before cleanup.** Run the archive check below, review the summary and image links, and compare preserved provenance files against their originals with `cmp`. Only then remove an explicit list of this run's disposable files (WAV, candidate frames, and verified duplicate sidecars). Do not use an ID-prefix deletion glob. On any failure, preserve intermediates and the original archive; report incomplete work.
 
 ## Summary Profiles
 
@@ -106,16 +104,12 @@ After writing the summary, review the video for visuals that carry information t
 
 ### Process
 
-1. **Download the video** at up to 1080p for frame extraction:
-   ```bash
-   yt-dlp -f "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]" \
-     -o "local/transcripts/<id>.video.mp4" --merge-output-format mp4 <url>
-   ```
+1. **Reuse the archive** at `local/summaries/<slug>/<id>.mkv`. Do not download a second video for routine frame extraction.
 2. **Sample frames** — extract ~10-12 evenly spaced frames across the video using ffmpeg. Use Claude vision to review them and determine the visual style (talking head, slides, mixed, screenshare, etc.).
 3. **Decide whether captures are needed.** Skip talking heads, studio shots, and visuals that merely illustrate what the conversation already says; note "No visual content to capture" in the process. For academic and technical material, retain legible equations, diagrams, result tables, and slides needed to follow the argument.
 4. **If visuals exist**, cross-reference the transcript to identify timestamps where key visual content appears (slide transitions, chart displays, diagram reveals, significant on-screen text). Extract candidate frames at those timestamps:
    ```bash
-   ffmpeg -ss <timestamp> -i local/transcripts/<id>.video.mp4 -frames:v 5 -q:v 2 /tmp/candidate_%03d.jpg
+   ffmpeg -n -ss <timestamp> -i "local/summaries/<slug>/<id>.mkv" -frames:v 5 -q:v 2 "local/transcripts/<id>.candidate-<timestamp>_%03d.jpg"
    ```
    Extract a short burst (~5 frames) around each timestamp to avoid capturing mid-transition or blurred frames.
 5. **Select best frames** using Claude vision. Pick the sharpest, most legible frame for each visual. Reject duplicates and near-duplicates.
@@ -132,78 +126,85 @@ After writing the summary, review the video for visuals that carry information t
    ```markdown
    ![Bubble diagram showing expanding AI capability frontier](images/slide-01-bubble-diagram.jpg)
    ```
-9. **Clean up** — delete the downloaded video file (`local/transcripts/<id>.video.mp4`) after extraction. Videos are large and re-downloadable; keep only the optimized images.
+9. Retain the archive permanently. Remove candidate frames only during the final verified cleanup step.
 
-## Archival Video Download
+## Archival Video Acquisition
 
-Download the highest-quality video and audio, packaged as a `.mkv` file stored alongside the summary. This preserves a local archival copy.
+Acquire video and audio once, as Matroska, before ASR or visual extraction. Keep the archive alongside the summary permanently.
 
-### Codec preferences
+### Online sources
 
-Prefer open codecs (AV1 > VP9 for video, Opus for audio) when they match or exceed the quality of patent-encumbered alternatives. But **quality wins over ideology** — if the source only serves H.264/AAC (common on archive.org and many non-YouTube hosts), or if H.264/H.265 is available at significantly higher resolution or bitrate than the open alternatives, use the higher-quality option. The MKV (Matroska) container accepts any codec.
+Use the same command for YouTube, archive.org, and other yt-dlp-supported hosts:
 
-Format priority when choosing: **highest quality first**, with open codecs as tiebreaker:
-1. AV1+Opus (open, best compression)
-2. VP9+Opus (open, good compression)
-3. H.265/HEVC+Opus or AAC (better compression than H.264)
-4. H.264+AAC (universal fallback)
-
-### Process
-
-#### YouTube (open formats usually available)
-
-1. **Download with open-format preference and embedded subtitles.** Video and audio are often separate streams on YouTube and must be downloaded independently and muxed together:
-   ```bash
-   yt-dlp \
-     -f "bestvideo[vcodec^=av01]+bestaudio[acodec=opus]/bestvideo[vcodec^=vp9]+bestaudio[acodec=opus]/bestvideo[vcodec^=av01]+bestaudio/bestvideo[vcodec^=vp9]+bestaudio/bestvideo+bestaudio" \
-     --write-auto-sub --sub-lang en --embed-subs \
-     --merge-output-format mkv \
-     -o "local/summaries/<slug>/<id>.mkv" <url>
-   ```
-   The trailing `bestvideo+bestaudio` fallback ensures you still get the best available even if no open codecs are served.
-
-#### archive.org (typically H.264 only)
-
-archive.org usually serves a single H.264 MP4. yt-dlp handles it, but subtitles need manual embedding:
-
-1. **Download the video:**
-   ```bash
-   yt-dlp -f "bestvideo+bestaudio/best" \
-     --merge-output-format mkv \
-     -o "local/summaries/<slug>/<id>.mkv" <url>
-   ```
-2. **Embed subtitles separately** if you downloaded SRT/VTT files in the transcript step:
-   ```bash
-   ffmpeg -i "local/summaries/<slug>/<id>.mkv" -i "local/transcripts/<id>.srt" \
-     -c copy -c:s srt "local/summaries/<slug>/<id>_with_subs.mkv"
-   mv "local/summaries/<slug>/<id>_with_subs.mkv" "local/summaries/<slug>/<id>.mkv"
-   ```
-
-#### Other sources
-
-Use `yt-dlp -f "bestvideo+bestaudio/best" --merge-output-format mkv` as the general fallback. Check if subtitles need manual embedding.
-
-### Verification
-
-Confirm the file exists and inspect streams:
 ```bash
-ffprobe -hide_banner "local/summaries/<slug>/<id>.mkv"
+yt-dlp --ignore-config --config-locations scripts/archive.conf \
+  -o "local/summaries/<slug>/<id>.%(ext)s" "<url>"
 ```
-Expect a video stream, an audio stream, and (if subtitles were embedded) a subtitle stream.
 
-### No cleanup needed
+`scripts/archive.conf` selects separate best video/audio streams with a combined-stream fallback. It forces Matroska remuxing even when no merge is needed; an `.mkv` filename alone does not prove the container. The config processes one video, not an entire playlist. Pass any needed authentication options explicitly; user-wide yt-dlp settings are ignored for predictable selection.
 
-Unlike the screen-capture video (which is temporary), the archival `.mkv` is the point. It stays in the summary directory permanently.
+**Quality before codec:** resolution, frame rate, dynamic range, bitrate, audio sample rate, and channels precede codec preferences. At equal reported quality, yt-dlp prefers AV1 over VP9 over H.265/H.264 and Opus over AAC. Reported bitrate is only a proxy, not a cross-codec perceptual-quality measurement. Inspect `yt-dlp -F "<url>"` when metadata is incomplete or misleading; record any deliberate format override in the preserved metadata.
 
-### Output
+### Local files and login-walled recordings
 
-The `.mkv` file lives alongside the summary markdown:
+For unsupported/login-walled hosts, ask for a local download rather than bypassing access controls. Inspect the local file with `ffprobe`, then remux without changing the original:
+
+```bash
+ffmpeg -n -i "<local-video>" -map 0 -c copy "local/summaries/<slug>/<id>.mkv"
 ```
+
+If the input is already the matching archive, reuse it. If a codec cannot be muxed into Matroska, convert only the incompatible track (for example, a text subtitle to SRT); do not silently discard streams. Keep original input untouched on failure. Confirm video/audio streams before using the archive; subtitles may be added after transcription.
+
+### Preserve provenance and embed subtitles
+
+Keep these files beside the summary, retaining their original names:
+
+- `<id>.meta.json`: source metadata, including any local-source details and deliberate overrides.
+- `<id>.transcript.txt`: the readable timestamped transcript used for the summary.
+- Original subtitle files: JSON3, VTT, SRT, and/or `<id>.asr.srt`. Preserve original ASR separately from corrections.
+
+Copy exact files without overwriting existing provenance, then verify each copy with `cmp`. Do not proceed if an existing destination differs. Metadata can contain signed URLs or other private source details; keep it local, not in the gist.
+
+For embedding, use SRT. Convert VTT with ffmpeg. For YouTube JSON3, retain the JSON3 and request an embeddable version without downloading video again:
+
+```bash
+yt-dlp --no-playlist --write-subs --write-auto-sub --sub-lang en \
+  --sub-format "srt/vtt/best" --convert-subs srt --skip-download \
+  -o "local/transcripts/<id>" "<url>"
+```
+
+If no embeddable version is available, convert the existing transcript's timed cues to SRT and verify text/timing before embedding; do not discard the source. An ASR `.srt` already works. Use the track corresponding to the transcript; an unrelated existing subtitle does not satisfy preservation.
+
+Add that SRT to a new candidate archive, preserving existing streams:
+
+```bash
+ffmpeg -n -i "local/summaries/<slug>/<id>.mkv" -i "<preserved-subtitle.srt>" \
+  -map 0 -map 1:0 -c copy "local/summaries/<slug>/<id>.with-subs.mkv"
+bash scripts/verify-archive.sh "local/summaries/<slug>/<id>.with-subs.mkv"
+```
+
+After the command succeeds, inspect the added track's text and timing against the preserved sidecar and compare candidate duration/streams with the original. Only after those checks pass, replace the original archive with the verified candidate. Do not overwrite an existing candidate; inspect it for resumption first. If the matching subtitle is already embedded and verified, skip the remux.
+
+### Verification and cleanup gate
+
+```bash
+bash scripts/verify-archive.sh "local/summaries/<slug>/<id>.mkv"
+```
+
+The read-only check requires a nonempty, probeable Matroska file with video, audio, and subtitle streams. It is a structural check, not a full decode or a subtitle-fidelity check. Also check duration against the source, confirm the correct subtitle track, and inspect playback if corruption is suspected.
+
+Use `--no-subtitles` only when no usable subtitles exist, transcription is unavailable, and the user explicitly accepts a subtitle-free archive. Record that exception; it does not waive the transcript requirement for a completed summary. Missing subtitles otherwise block cleanup.
+
+After this gate and the summary/provenance checks in **Workflow**, delete only the explicit disposable paths from this run. Retain the archive, metadata, transcript, subtitle sidecars, summary, and selected images:
+
+```text
 local/summaries/<slug>/
 ├── <id>.md
 ├── <id>.mkv
+├── <id>.meta.json
+├── <id>.transcript.txt
+├── <id>.asr.srt          # or source subtitle files
 └── images/
-    └── ...
 ```
 
 ## Publishing to GitHub Gist
@@ -216,6 +217,7 @@ Key constraints: gists don't support directories (images go at root), use absolu
 
 - Front matter: title, source URL, speaker, date, duration.
 - Structured with headers, bullet points, and occasional blockquotes for key statements.
+- For multiple major parts, include a contents list with labels matching major-part headings and links to stable anchors (explicit anchors where generated fragments would be fragile). Keep document links distinct from source-video timestamps. Related summaries use one document-title pattern and one basis for major-part titles. Skip the contents list for short single-part summaries.
 - Capture all substantive claims, frameworks, advice, and examples.
 - Use the speaker's own language for key terms and phrases; quote only wording verified against the transcript.
 - Preserve concrete examples — they're the difference between "I get it" and "I could explain it."
@@ -236,4 +238,4 @@ Key constraints: gists don't support directories (images go at root), use absolu
 
 ## Contributing
 
-All changes follow the workflow in [CONTRIBUTING.md](CONTRIBUTING.md). File a GitHub issue, use the bundled skills to brainstorm, plan, execute, verify, and review, then open a PR with the plan and issue reference.
+Follow [CONTRIBUTING.md](CONTRIBUTING.md). Scale planning and review to the change; publishing a PR is separate from local implementation.

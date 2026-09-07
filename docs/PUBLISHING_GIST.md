@@ -1,6 +1,8 @@
 # Publishing to GitHub Gist
 
-Publish a finished summary as a GitHub Gist for easy sharing.
+Publish a finished summary as a GitHub Gist for easy sharing. Before starting, check `command -v gh` and `gh auth status`; preserve local output and request setup if unavailable. Publishing requires user authorization; finishing a local summary does not authorize publication.
+
+Publish only the adapted summary and selected images. Keep the archive, metadata (which may contain private source details), transcript, and subtitle sidecars local.
 
 ## Gist Display Conventions
 
@@ -27,7 +29,7 @@ The canonical summary in `local/summaries/` uses a multi-line bold metadata bloc
 
 The `<br>` tags are required — without them, GitHub collapses consecutive lines into a single paragraph.
 
-Fetch the author's channel/profile URL from video metadata (`yt-dlp --dump-json` → `uploader_url`). For academic talks, use ORCID or institutional page if available.
+Read the author's channel/profile URL from preserved `local/summaries/<slug>/<id>.meta.json` (`uploader_url`). For academic talks, use ORCID or an institutional page if available.
 
 Write the adapted version to a temp file named `<slug>.md` for the gist — don't modify the canonical summary.
 
