@@ -12,6 +12,7 @@ On first use in a fresh clone, follow `docs/FIRST_RUN.md` to initialize project 
 
 - **Dependencies**: Nix packages live in `flake.nix` (`buildInputs`). Homebrew setup is maintained separately in `README.md`; do not require identical package lists.
 - **Initialization**: `.envrc` uses the Nix flake when available; otherwise it checks core tools. It then runs scripts from `.envrc.d/` and `.envrc.local.d/`.
+- **Online yt-dlp**: Use `bash scripts/yt-dlp.sh` for metadata, downloads, subtitles and format inspection. It requires uv and refreshes the latest official GitHub nightly in an isolated Python environment on each invocation. Do not fall back to the older Nix/Homebrew yt-dlp if refresh fails. The packaged binary remains for offline tests; local preparation and completed resume need no refresh. See README for runtime requirements.
 - **Optional capabilities**: Before local transcription, check `command -v whisper-cli` and the model file. Before publishing, check `command -v gh` and authentication. If unavailable, preserve progress and request setup; do not silently skip the step.
 - `.envrc.d/setup.sh` creates `local/inbox/`, `local/transcripts/`, `local/summaries/`, and `local/models/` and exports their directory paths.
 - These directories are **local working directories** — not tracked in git. They're created on first `direnv allow`.
@@ -23,12 +24,12 @@ This is the canonical workflow for every agent entry point. Run commands from th
 
 If the request does not name a source, inspect `local/inbox/` before requesting input. Scope every mutation to that source. Preserve unrelated instructions, models, transcripts, summaries, and local media. If input, access, or a required tool is unavailable, preserve partial work and request what is missing rather than bypassing the workflow.
 
-1. **Identify the source and destination.** Fetch online metadata with `yt-dlp --no-playlist --dump-json --no-download "<url>"`; save it as `local/transcripts/<id>.meta.json` after identifying the video ID. For local files, choose a stable ID and record the original filename, available title/speaker/date/source URL, and `ffprobe` duration in that JSON file; mark unknown fields rather than inventing them. Derive a 4–6-word lowercase hyphenated slug from the title and create `local/summaries/<slug>/`. Check existing files before writing: resume only a matching source; do not overwrite unrelated artifacts.
+1. **Identify the source and destination.** Fetch online metadata with `bash scripts/yt-dlp.sh --no-playlist --dump-json --no-download "<url>"`; save it as `local/transcripts/<id>.meta.json` after identifying the video ID. For local files, choose a stable ID and record the original filename, available title/speaker/date/source URL, and `ffprobe` duration in that JSON file; mark unknown fields rather than inventing them. Derive a 4–6-word lowercase hyphenated slug from the title and create `local/summaries/<slug>/`. Check existing files before writing: resume only a matching source; do not overwrite unrelated artifacts.
 2. **Acquire the archive once** using **Archival Video Acquisition** below. Use that `.mkv` for ASR and frame extraction; preserve the original local input. A separate preview download is an exception only when archive size makes it necessary, not the default.
 3. **Obtain subtitles.** Format depends on the source:
    - **YouTube**: JSON3 format (richer than VTT for parsing):
      ```bash
-     yt-dlp --no-playlist --write-subs --write-auto-sub --sub-lang en --sub-format json3 --skip-download -o "local/transcripts/<id>" "<url>"
+     bash scripts/yt-dlp.sh --no-playlist --write-subs --write-auto-sub --sub-lang en --sub-format json3 --skip-download -o "local/transcripts/<id>" "<url>"
      ```
    - **archive.org**: yt-dlp often doesn't detect archive.org subtitles. Check the item's download page (`https://archive.org/download/<id>/`) for `.srt` or `.vtt` files and download them directly with `curl`.
    - **Other sources**: Try `--write-auto-sub` first; fall back to `--write-sub` or direct download.
@@ -143,13 +144,13 @@ Acquire video and audio once, as Matroska, before ASR or visual extraction. Keep
 Use the same command for YouTube, archive.org, and other yt-dlp-supported hosts:
 
 ```bash
-yt-dlp --ignore-config --config-locations scripts/archive.conf \
+bash scripts/yt-dlp.sh --ignore-config --config-locations scripts/archive.conf \
   -o "local/summaries/<slug>/<id>.%(ext)s" "<url>"
 ```
 
 `scripts/archive.conf` selects separate best video/audio streams with a combined-stream fallback. It forces Matroska remuxing even when no merge is needed; an `.mkv` filename alone does not prove the container. The config processes one video, not an entire playlist. Pass any needed authentication options explicitly; user-wide yt-dlp settings are ignored for predictable selection.
 
-**Quality before codec:** resolution, frame rate, dynamic range, bitrate, audio sample rate, and channels precede codec preferences. At equal reported quality, yt-dlp prefers AV1 over VP9 over H.265/H.264 and Opus over AAC. Reported bitrate is only a proxy, not a cross-codec perceptual-quality measurement. Inspect `yt-dlp -F "<url>"` when metadata is incomplete or misleading; record any deliberate format override in the preserved metadata.
+**Quality before codec:** resolution, frame rate, dynamic range, bitrate, audio sample rate, and channels precede codec preferences. At equal reported quality, yt-dlp prefers AV1 over VP9 over H.265/H.264 and Opus over AAC. Reported bitrate is only a proxy, not a cross-codec perceptual-quality measurement. Inspect `bash scripts/yt-dlp.sh -F "<url>"` when metadata is incomplete or misleading; record any deliberate format override in the preserved metadata.
 
 ### Local files and login-walled recordings
 
@@ -174,7 +175,7 @@ Copy exact files without overwriting existing provenance, then verify each copy 
 For embedding, use SRT. Convert VTT with ffmpeg. For YouTube JSON3, retain the JSON3 and request an embeddable version without downloading video again:
 
 ```bash
-yt-dlp --no-playlist --write-subs --write-auto-sub --sub-lang en \
+bash scripts/yt-dlp.sh --no-playlist --write-subs --write-auto-sub --sub-lang en \
   --sub-format "srt/vtt/best" --convert-subs srt --skip-download \
   -o "local/transcripts/<id>" "<url>"
 ```

@@ -5,6 +5,7 @@ import importlib.util
 import functools
 import http.server
 import os
+import shutil
 import threading
 import json
 from pathlib import Path
@@ -45,7 +46,39 @@ def main():
     spec.loader.exec_module(helper)
     with tempfile.TemporaryDirectory(prefix="media-prep-check-") as tmp:
         tmp = Path(tmp).resolve()
+        # Fake only package resolution; every media operation still uses real yt-dlp.
+        tools = tmp / "tools"
+        tools.mkdir()
+        uv_log = tmp / "uv.jsonl"
+        uv = tools / "uv"
+        uv.write_text(f"#!{sys.executable}\n" + f'''import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+assert args[:9] == ['--no-config', 'tool', 'run', '--isolated', '--refresh', '--from',
+    'yt-dlp[default] @ https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.tar.gz',
+    'python', '-I'], args
+assert args[9:11] == ['-m', 'yt_dlp'], args
+with Path({str(uv_log)!r}).open('a') as log:
+    log.write(json.dumps(args[11:]) + '\\n')
+if os.environ.get('TEST_UV_FAIL'):
+    sys.exit(19)
+os.execv({shutil.which('yt-dlp')!r}, ['yt-dlp', *args[11:]])
+''')
+        uv.chmod(0o755)
+        os.environ["PATH"] = str(tools) + os.pathsep + os.environ["PATH"]
+        wrapper = ROOT / "scripts/yt-dlp.sh"
+        version = subprocess.run(["bash", str(wrapper), "--version"], capture_output=True)
+        assert version.returncode == 0, version.stderr
+        assert version.stdout == run("yt-dlp", "--version")
+        assert json.loads(uv_log.read_text().splitlines()[-1]) == ["--version"]
+        failed = subprocess.run(["bash", str(wrapper), "--version"], capture_output=True,
+                                env={**os.environ, "TEST_UV_FAIL": "1"})
+        assert failed.returncode == 19 and not failed.stdout, "refresh failure fell back to installed yt-dlp"
         workspace = tmp / "local"
+        blocked = cli("prepare", "https://example.invalid/video", "--workspace", workspace,
+                      "--slug", "test-nightly-refresh-failure", ok=False,
+                      env={**os.environ, "TEST_UV_FAIL": "1"})
+        assert "Command failed" in blocked["error"] and not workspace.exists()
         source = tmp / "original recording.mkv"
         run("ffmpeg", "-v", "error", "-nostdin", "-f", "lavfi", "-i", "color=size=64x48:rate=10",
             "-f", "lavfi", "-i", "sine=sample_rate=16000", "-t", "3", "-c:v", "ffv1", "-c:a", "pcm_s16le", source)
@@ -157,9 +190,10 @@ def main():
         before = tree(workspace)
         cli("prepare", url, "--workspace", workspace, "--slug", "test-online-video-recording", "--subtitles", vtt)
         assert tree(workspace) == before, "online resume must not need network or rewrite metadata"
-        # Only Whisper is faked: exercise our audio/CLI/output contract, not ASR quality.
-        tools = tmp / "tools"
-        tools.mkdir()
+        calls = [json.loads(line) for line in uv_log.read_text().splitlines()]
+        for flag in ("--dump-json", "--config-locations", "--write-subs"):
+            assert any(flag in call for call in calls), f"nightly launcher bypassed for {flag}"
+        # Fake Whisper to exercise our audio/CLI/output contract, not ASR quality.
         whisper = tools / "whisper-cli"
         whisper.write_text(f"#!{sys.executable}\n" + '''import pathlib, sys
 args = sys.argv[1:]

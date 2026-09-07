@@ -23,13 +23,13 @@ From the repository root:
 ```bash
 bash tests/check-workflow.sh
 python3 tests/check-media-prep.py
-for script in scripts/verify-archive.sh tests/check-workflow.sh .envrc .envrc.d/setup.sh; do
+for script in scripts/yt-dlp.sh scripts/verify-archive.sh tests/check-workflow.sh .envrc .envrc.d/setup.sh; do
   bash -n "$script" || exit 1
 done
 git diff --check
 ```
 
-The offline checks require Python 3.11+, Bash, yt-dlp, ffmpeg, and ffprobe. They exercise quality-first selection, archive rejection/acceptance, preparation, subtitle conversion, provenance, embedding, capture, and resume/conflict safety using temporary synthetic media, not existing local files. Preparation tests use loopback HTTP with real yt-dlp; a fake Whisper executable checks the ASR command/output contract, not transcription quality. No Internet access or model is required. The standalone shell archive verifier checks structure, not full decoding or subtitle fidelity.
+The offline checks require Python 3.11+, Bash, yt-dlp, ffmpeg, and ffprobe. They exercise quality-first selection, archive rejection/acceptance, preparation, subtitle conversion, provenance, embedding, capture, and resume/conflict safety using temporary synthetic media, not existing local files. Preparation tests use loopback HTTP with real yt-dlp. A fake uv checks nightly launcher arguments and refresh failure without downloading packages; a fake Whisper checks the ASR command/output contract, not transcription quality. These offline checks need no Internet access or model. The live nightly check is separate: `bash scripts/yt-dlp.sh --version` requires uv and Internet access. The standalone shell archive verifier checks structure, not full decoding or subtitle fidelity.
 
 For workflow/skill edits, also review the scenarios under `.pi/skill-evals/video-summarization/scenarios/` against the canonical workflow. Those Markdown scenarios describe behavior; the shell suite does not run model evaluations. Report which checks ran and any unverified paths.
 

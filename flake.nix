@@ -19,6 +19,7 @@
           default = pkgs.mkShell {
             buildInputs = with pkgs; [
               python3
+              uv
               yt-dlp
               ffmpeg
               imagemagick

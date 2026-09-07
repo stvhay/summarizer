@@ -26,7 +26,7 @@ direnv allow    # loads tools from flake.nix, including whisper-cpp
 Install the dependencies:
 
 ```bash
-brew install yt-dlp ffmpeg imagemagick mkvtoolnix python
+brew install uv yt-dlp ffmpeg imagemagick mkvtoolnix python
 ```
 
 Then clone and allow direnv:
@@ -69,7 +69,18 @@ Works with YouTube, archive.org, and any other site [yt-dlp supports](https://gi
 
 ## Mechanical preparation helper
 
-Requires Python **3.11+**, ffmpeg, ffprobe, and Bash; online sources also need yt-dlp. Python is explicit in the Nix shell and Homebrew setup. After changing `flake.nix`, restart the session so direnv reloads it.
+Requires Python **3.11+**, ffmpeg, ffprobe, and Bash; online sources also need **uv**. Python and uv are explicit in the Nix shell and Homebrew setup. After changing `flake.nix`, restart the session so direnv reloads it.
+
+Online metadata, archives and subtitles use `scripts/yt-dlp.sh`. This launcher refreshes the [latest official GitHub nightly](https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest) through uv on each invocation, with yt-dlp's default Python dependencies. It runs in an isolated environment and ignores Python import paths that could load an older Nix package. It does not update global packages or the Nix store. Resolution/install failures stop preparation; there is no fallback to the installed yt-dlp. GitHub and dependency-index access are required. Nightlies can regress; this is deliberately not a pinned runtime.
+
+Use the same launcher for manual online commands:
+
+```bash
+bash scripts/yt-dlp.sh --version
+bash scripts/yt-dlp.sh --ignore-config -F 'https://www.youtube.com/watch?v=VIDEO_ID'
+```
+
+Local preparation, capture, verification and completed resume do not refresh yt-dlp. The packaged `yt-dlp` remains available for offline regression checks. A supported JavaScript runtime may also be needed by YouTube; the Python package does not install one.
 
 From the repository root:
 
@@ -127,11 +138,12 @@ local/summaries/<slug>/
 
 `CLAUDE.md` owns workflow decisions, summary standards, and failure handling. The Pi skill points to it rather than maintaining a second workflow.
 
+- `scripts/yt-dlp.sh`: refreshes and runs the official GitHub nightly through uv for online work.
 - `scripts/archive.conf`: native yt-dlp quality-first selection and Matroska output policy.
 - `scripts/verify-archive.sh`: read-only structural check; requires video, audio, and subtitles by default. Does not prove full decode or subtitle fidelity.
 - `scripts/media-prep.py`: source-owned mechanical preparation, candidate capture and read-only verification.
 - `tests/check-workflow.sh`: offline regression checks using synthetic formats and tiny media files.
-- `tests/check-media-prep.py`: preparation/resume/conflict checks with real ffmpeg/ffprobe and yt-dlp on loopback HTTP; a fake Whisper executable checks only the ASR command/output contract.
+- `tests/check-media-prep.py`: preparation/resume/conflict checks with real ffmpeg/ffprobe and yt-dlp on loopback HTTP. A fake uv checks launcher arguments and refresh failure without Internet access; a fake Whisper checks only the ASR command/output contract.
 
 Run `bash tests/check-workflow.sh` and `python3 tests/check-media-prep.py`. No Internet, new test framework, or existing local media required. Live hosts and real ASR quality are not covered by these checks.
 

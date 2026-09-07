@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 FFMPEG = ["ffmpeg", "-v", "error", "-nostdin", "-n"]
+YTDLP = ["bash", ROOT / "scripts/yt-dlp.sh"]
 
 
 def require(condition, message):
@@ -240,7 +241,7 @@ def online_subtitles(work, args):
     if not work.data.get("subtitle_search_done"):
         require(not list(work.prep.glob(prefix.name + ".*")), "Unrecorded subtitle download; inspect before resuming")
         youtube = "youtube" in work.data["metadata"].get("extractor", "").lower()
-        run(["yt-dlp", "--ignore-config", "--no-playlist", "--no-overwrites", "--write-subs", "--write-auto-subs",
+        run([*YTDLP, "--ignore-config", "--no-playlist", "--no-overwrites", "--write-subs", "--write-auto-subs",
              "--sub-langs", args.language, "--sub-format", "json3" if youtube else "srt/vtt/best", "--skip-download",
              "-o", str(prefix).replace("%", "%%"), "--", args.source], work.log)
         paths = sorted(work.prep.glob(prefix.name + ".*"))
@@ -324,7 +325,7 @@ def prepare(args):
         if existing.is_file():
             metadata = json.loads(existing.read_text())["metadata"]
         else:
-            metadata = json.loads(run(["yt-dlp", "--ignore-config", "--no-playlist", "--dump-json", "--no-download", "--", source]))
+            metadata = json.loads(run([*YTDLP, "--ignore-config", "--no-playlist", "--dump-json", "--no-download", "--", source]))
         require(args.id is None or args.id == metadata["id"], "Online ID must match yt-dlp metadata")
         args.id = metadata["id"]
         identity = {"source": source, "language": args.language}
@@ -351,7 +352,7 @@ def prepare(args):
     if remote:
         def download(path):
             require(not [p for p in work.directory.glob(ident + ".*") if work.key(p) not in work.data["files"]], "Unrecorded download files; inspect before resuming")
-            run(["yt-dlp", "--ignore-config", "--config-locations", ROOT / "scripts/archive.conf", "-o",
+            run([*YTDLP, "--ignore-config", "--config-locations", ROOT / "scripts/archive.conf", "-o",
                  str(path.with_suffix("")).replace("%", "%%") + ".%(ext)s", "--", source], work.log)
         work.output(archive, download)
     else:
